@@ -2,6 +2,7 @@
 #include <iostream>
 #include <window.h>
 #include <renderer.h>
+#include <thread>
 
 struct GameState{
     bool running = true;
@@ -17,7 +18,7 @@ int main(int argc,char** argv) {
 
     auto* camera = new Camera();
     model snake;
-    Renderer::LoadModel("data/Snake.gltf",&snake);
+    Renderer::LoadAnimateModel("data/animate_triangle.gltf",&snake);
 
     render_mode mode;
     while (state.running){
@@ -32,6 +33,9 @@ int main(int argc,char** argv) {
         }
         renderer->Render(camera,&snake);
         window->Update();
+
+//        using namespace std::chrono_literals;
+//        std::this_thread::sleep_for(16ms);
     }
 
     delete window;

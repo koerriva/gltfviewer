@@ -23,26 +23,26 @@ Renderer::Renderer() {
 }
 
 static std::unordered_map<std::string,int> locations;
-int GetLocation(material* mat,const char* name){
+int GetLocation(uint32_t pid,const char* name){
     auto iter = locations.find(name);
     if(iter==locations.end()){
-        int location = glGetUniformLocation(mat->pid,name);
+        int location = glGetUniformLocation(pid,name);
         locations.insert({name,location});
         return location;
     }
     return iter->second;
 }
 
-void SetMaterialParam_float(material* mat,const char* name,float value){
-    int location = GetLocation(mat,name);
+void SetMaterialParam_float(uint32_t pid,const char* name,float value){
+    int location = GetLocation(pid,name);
     glUniform1f(location,value);
 }
-void SetMaterialParam_mat4(material* mat,const char* name,float* value){
-    int location = GetLocation(mat,name);
+void SetMaterialParam_mat4(uint32_t pid,const char* name,float* value){
+    int location = GetLocation(pid,name);
     glUniformMatrix4fv(location,1,GL_FALSE,value);
 }
-void SetMaterialParam_vec4(material* mat,const char* name,float* value){
-    int location = GetLocation(mat,name);
+void SetMaterialParam_vec4(uint32_t pid,const char* name,float* value){
+    int location = GetLocation(pid,name);
     glUniform4fv(location,1,value);
 }
 
@@ -50,15 +50,17 @@ void Renderer::SetRenderMode(render_mode mode) {
     this->m_mode = mode;
 }
 
+
+float currTime = 0;
+keyframe_t * prevFrame = nullptr;
+keyframe_t * nextFrame = nullptr;
+
+
 void Renderer::Render(Camera *camera, model* model) {
     glEnable(GL_DEPTH_TEST);
 
     auto p = camera->GetProjection();
     auto v = camera->GetViewMatrix();
-    auto m = mat4{1};
-    m = translate(m,vec3{0,-1.f,0.f});
-    m = rotate(m, radians(1.f+game_time),vec3{0.f,1.f,0.f});
-    m = scale(m,vec3{1.f});
 
     glClearColor(0.2f,0.3f,0.634f,0.6778f);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -72,24 +74,53 @@ void Renderer::Render(Camera *camera, model* model) {
     }
 
     {
+        glUseProgram(model->shader);
+        SetMaterialParam_float(model->shader,"time",game_time);
+        SetMaterialParam_mat4(model->shader,"P", value_ptr(p));
+        SetMaterialParam_mat4(model->shader,"V", value_ptr(v));
+        SetMaterialParam_mat4(model->shader,"M", value_ptr(model->transform));
+
+        if(model->animation_count>0){
+            if(currTime>1.0){
+                currTime = 0.0;
+            }
+
+            animation_t * animation = model->animations;
+            for (int i = 0; i < animation->keyframe_count; ++i) {
+                keyframe_t* keyframe = animation->keyframe+i;
+                if(keyframe->time<=currTime){
+                    prevFrame = keyframe;
+                }
+            }
+            for (int i = 0; i < animation->keyframe_count; ++i) {
+                keyframe_t* keyframe = animation->keyframe+i;
+                if(keyframe->time>currTime){
+                    nextFrame = keyframe;
+                    break;
+                }
+            }
+
+            float interp = (currTime- prevFrame->time)/(nextFrame->time-prevFrame->time);
+            quat rotation = slerp(prevFrame->rotation,nextFrame->rotation,interp);
+            vec3 angle = eulerAngles(rotation);
+            mat4 m = model->transform;
+            m = rotate(m,angle.x,vec3(1.0,0.0,0.0))
+                * rotate(m,angle.y,vec3(0.0,1.0,0.0))
+                * rotate(m,angle.z,vec3(0.0,0.0,1.0));
+            SetMaterialParam_mat4(model->shader,"M", value_ptr(m));
+
+            currTime += 0.0001;
+        }
 
         for (int i = 0; i < model->meshes_size; ++i) {
             mesh * mesh = &model->meshes[i];
             material * mat = &mesh->material;
-            glUseProgram(mat->pid);
 
-            SetMaterialParam_float(mat,"time",game_time);
-            SetMaterialParam_mat4(mat,"P", value_ptr(p));
-            SetMaterialParam_mat4(mat,"V", value_ptr(v));
-            SetMaterialParam_mat4(mat,"M", value_ptr(m));
-
-            SetMaterialParam_vec4(mat,"base_color", value_ptr(mat->baseColor));
-            SetMaterialParam_float(mat,"metallic",mat->metallic);
-            SetMaterialParam_float(mat,"roughness",mat->roughness);
+            SetMaterialParam_vec4(model->shader,"base_color", value_ptr(mat->baseColor));
 
             glBindVertexArray(mesh->vao);
             glDrawElements(GL_TRIANGLES,mesh->indices_count,GL_UNSIGNED_SHORT,nullptr);
-//        glBindVertexArray(0);
+            glBindVertexArray(0);
         }
     }
 
@@ -117,7 +148,8 @@ int Renderer::LoadModel(const char *filename,model* model) {
     }
 
     std::cout << "Upload BaseShader ..." << std::endl;
-    uint32_t baseShader = Renderer::LoadBaseShader();
+    uint32_t baseShader = Shader::LoadBaseShader();
+    model->shader = baseShader;
 
     cgltf_mesh cmesh = data->meshes[0];
     for (int i = 0; i < cmesh.primitives_count; ++i) {
@@ -227,7 +259,6 @@ int Renderer::LoadModel(const char *filename,model* model) {
             mesh.material.baseColor = {baseColor[0],baseColor[1],baseColor[2],baseColor[3]};
             mesh.material.metallic = cmat->pbr_metallic_roughness.metallic_factor;
             mesh.material.roughness = cmat->pbr_metallic_roughness.roughness_factor;
-            mesh.material.pid = baseShader;
         }
 
         model->meshes[model->meshes_size++] = mesh;
@@ -237,101 +268,130 @@ int Renderer::LoadModel(const char *filename,model* model) {
     return 1;
 }
 
-uint32_t CreateShader(const char* source,uint32_t type){
-    unsigned int shader = glCreateShader(type);
-    if (type==GL_VERTEX_SHADER){
-        glShaderSource(shader,1,&source, nullptr);
+int Renderer::LoadAnimateModel(const char *filename,model* model) {
+    cgltf_options options{};
+    cgltf_data* data = NULL;
+    cgltf_result result = cgltf_parse_file(&options, filename, &data);
+    if (result == cgltf_result_success)
+    {
+        cgltf_load_buffers(&options,data,filename);
 
-    }else if(type==GL_FRAGMENT_SHADER){
-        glShaderSource(shader,1,&source, nullptr);
+        std::cout << "Success load : " << filename << std::endl;
     }else{
-        std::cerr << "Unsupported shader " << std::endl;
-        exit(-1001);
+        std::cerr << "Can't find file : " << filename << std::endl;
+        return 0;
     }
-    glCompileShader(shader);
-    int success;
-    char info[512];
-    glGetShaderiv(shader,GL_COMPILE_STATUS,&success);
-    if(!success){
-        glGetShaderInfoLog(shader,512, nullptr,info);
-        std::cerr << "Compile shader :" << info << std::endl;
-        exit(-1002);
+
+    if(data->meshes_count<1){
+        return 0;
     }
-    return shader;
+
+    std::cout << "Upload AnimateShader ..." << std::endl;
+    uint32_t shader = Shader::LoadAnimateShader();
+    model->shader = shader;
+
+    for (int i = 0; i < data->nodes_count; ++i) {
+        cgltf_node* cnode = &data->nodes[i];
+        if(!cnode->mesh)continue;
+
+        cgltf_mesh* cmesh = cnode->mesh;
+
+        if(cnode->has_translation){
+            model->transform = translate(model->transform, make_vec3(cnode->translation));
+        }
+        if(cnode->has_rotation){
+            quat r = make_quat(cnode->rotation);
+            vec3 angle = eulerAngles(r);
+            model->transform = rotate(model->transform,angle.x,vec3(1.0,0.0,0.0));
+            model->transform = rotate(model->transform,angle.y,vec3(0.0,1.0,0.0));
+            model->transform = rotate(model->transform,angle.z,vec3(0.0,0.0,1.0));
+        }
+        if(cnode->has_scale){
+            model->transform = scale(model->transform, make_vec3(cnode->scale));
+        }
+
+        std::cout << "Node Mesh : " << cmesh->name << std::endl;
+
+        for (int j = 0; j < cmesh->primitives_count; ++j) {
+            mesh mesh;
+            std::cout << "Upload Mesh ..." << std::endl;
+
+            glGenVertexArrays(1,&mesh.vao);
+            glBindVertexArray(mesh.vao);
+
+            uint32_t vbo = 0;
+
+            cgltf_primitive primitive = cmesh->primitives[j];
+
+            cgltf_accessor* position_accessor = nullptr;
+            cgltf_accessor* indices_accessor = primitive.indices;
+
+            for (int i = 0; i < primitive.attributes_count; ++i) {
+                auto attr = primitive.attributes[i];
+                std::cout << "Attr L : " << attr.name << std::endl;
+                if(strcmp(attr.name,"POSITION")==0){
+                    std::cout << "Attr : " << attr.name << std::endl;
+                    position_accessor = attr.data;
+                    continue;
+                }
+            }
+
+            int offset = position_accessor->buffer_view->offset;
+            void* vertices_buffer = (uint8_t*)(position_accessor->buffer_view->buffer->data)+offset;
+            int vertices_num = position_accessor->count;
+            int vertices_size = position_accessor->buffer_view->size;
+
+            offset = indices_accessor->buffer_view->offset;
+            void* indices_buffer = (uint8_t*)(indices_accessor->buffer_view->buffer->data)+offset;
+            int indices_num = indices_accessor->count;
+            int indices_size = indices_accessor->buffer_view->size;
+
+            mesh.vertices_count = vertices_num;
+            mesh.indices_count = indices_num;
+
+            //vertices
+            glGenBuffers(1,&vbo);
+            glBindBuffer(GL_ARRAY_BUFFER,vbo);
+            glBufferData(GL_ARRAY_BUFFER,vertices_size,vertices_buffer,GL_STATIC_DRAW);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3*sizeof(float),nullptr);
+
+            uint32_t ebo = 0 ;
+            glGenBuffers(1,&ebo);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER,indices_size,indices_buffer,GL_STATIC_DRAW);
+
+            glBindVertexArray(0);
+
+            mesh.material.baseColor = vec4{1.0};
+            model->meshes[model->meshes_size++] = mesh;
+        }
+    }
+
+    model->animation_count = data->animations_count;
+    for (int i = 0; i < data->animations_count; ++i) {
+        cgltf_animation* canimation = &data->animations[i];
+        std::cerr << "Animation : " << canimation->name << std::endl;
+
+        animation_t anim;
+        for (int j = 0; j < canimation->channels_count; ++j) {
+            cgltf_animation_channel* channel = &canimation->channels[j];
+
+            cgltf_accessor* input = channel->sampler->input;
+            cgltf_accessor* output = channel->sampler->output;
+
+            for (int k = 0; k < input->count; ++k) {
+                keyframe_t keyframe;
+                keyframe.has_rotation = true;
+                keyframe.time = *((float*)((uint8_t*)input->buffer_view->buffer->data + input->offset) + k);
+                keyframe.rotation = make_quat((float*)((uint8_t *)(output->buffer_view->buffer->data)+output->offset) + k*4);
+                anim.keyframe[anim.keyframe_count++] = keyframe;
+            }
+        }
+
+        model->animations[i] = anim;
+    }
+
+    cgltf_free(data);
+    return 1;
 }
-
-uint32_t CreateProgram(unsigned vertShader,unsigned fragShader){
-    unsigned int program = glCreateProgram();
-    glAttachShader(program,vertShader);
-    glAttachShader(program,fragShader);
-    glLinkProgram(program);
-    int success;
-    char info[512];
-    glGetProgramiv(program,GL_LINK_STATUS, &success);
-    if(!success){
-        glGetProgramInfoLog(program,512, nullptr,info);
-        std::cerr << "Compile program :" << info << std::endl;
-        exit(-1002);
-    }
-    return program;
-}
-
-unsigned Renderer::LoadBaseShader(){
-    const char* vert_shader_source = R"(
-    #version 430
-
-    layout (location = 0) in vec3 position;
-    layout (location = 1) in vec3 normal;
-    layout (location = 2) in vec2 texcoord;
-
-    uniform float time;
-
-    uniform mat4 P;
-    uniform mat4 V;
-    uniform mat4 M;
-
-    out vec2 v_TexCoord;
-    out vec3 v_WorldPos;
-    out vec3 v_Normal;
-
-    void main(){
-        gl_Position = P*V*M*vec4(position,1.0);
-        v_TexCoord = texcoord;
-        v_Normal = mat3(transpose(inverse(M))) * normal;
-        v_WorldPos = (M*vec4(position,1.0)).xyz;
-    }
-)";
-    const char* frag_shader_source = R"(
-    #version 430
-    const float pi = 3.1415926;
-
-    out vec4 FragColor;
-
-    in vec2 v_TexCoord;
-    in vec3 v_WorldPos;
-    in vec3 v_Normal;
-
-    vec3 light_pos = vec3(2.0,2.0,0.0);
-    vec3 light_color = vec3(1.0);
-    vec4 sky_color = vec4(0.2f,0.3f,0.634f,0.6778f);
-
-    uniform vec4 base_color;
-    uniform float metallic;
-    uniform float roughness;
-
-    void main(){
-        vec3 light_dir = normalize(light_pos-v_WorldPos);
-
-        vec3 ambient = sky_color.rgb * vec3(0.6);
-        vec3 diffuse = max(dot(v_Normal,light_dir),0.0)*light_color;
-
-        FragColor = vec4(base_color.rgb*(ambient+diffuse),base_color.a);
-    }
-)";
-
-    auto vertexShader = CreateShader(vert_shader_source,GL_VERTEX_SHADER);
-    auto fragmentShader = CreateShader(frag_shader_source,GL_FRAGMENT_SHADER);
-    uint32_t program = CreateProgram(vertexShader,fragmentShader);
-    return program;
-}
-
