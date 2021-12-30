@@ -26,45 +26,58 @@ private:
     float z_far = 1000.f;
 };
 
-typedef struct {
+typedef struct material {
     vec4 baseColor{1.f};
-    float metallic = 0;
-    float roughness = 0;
 } material;
 
-typedef struct {
+typedef struct mesh {
     uint32_t vao;
-    int vertices_count = 0;
-    int normal_count = 0;
-    int texcoord0_count = 0;
     int indices_count = 0;
-    material material{};
+    material material;
 } mesh;
 
-typedef struct {
+typedef struct keyframe_t {
     float time = 0;
-    bool has_translation = false;
     vec3 translation;
-    bool has_rotation = false;
     quat rotation;
-    bool has_scale = false;
     vec3 scale;
 } keyframe_t;
 
-typedef struct {
-    int keyframe_count=0;
-    keyframe_t keyframe[100];
-    int interpolation=1;
+typedef struct channel_t {
+    int keyframe_count;
+    keyframe_t keyframe[60];
+    int interpolation;//0-liber,1-step,2-cubic
+    bool has_translation;
+    bool has_rotation;
+    bool has_scale;
+} channel_t;
+
+typedef struct animation_t {
+    int channel_count = 0;
+    channel_t channels[5];
 } animation_t;
 
-typedef struct {
+typedef struct joint_t {
+    int id;
+    mat4 transform;
+} joint_t;
+
+typedef struct skeleton_t {
+    int joints_count = 0;
+    mat4 inverse_bind_matrices[64];
+    joint_t joins[64];
+} skeleton_t;
+
+typedef struct model_t {
     uint32_t shader;
-    mesh meshes[100]{0};
-    uint32_t meshes_size = 0;
+    mesh meshes[10];
+    uint32_t meshes_size=0;
     mat4 transform{1.0};
     int animation_count=0;
-    animation_t animations[100]{0};
-} model;
+    animation_t animations[20];
+    int skeleton_count=0;
+    skeleton_t skeleton[20];
+} model_t;
 
 enum render_mode {
     shader,wireframe
@@ -75,13 +88,8 @@ public:
     Renderer();
     ~Renderer() = default;
 
-    void Render(Camera* camera,model* model);
+    void Render(Camera* camera, model_t* model);
     void SetRenderMode(render_mode mode);
-
-    static int LoadModel(const char *filename,model* model);
-
-    static int LoadAnimateModel(const char *filename,model* model);
-
 private:
     render_mode m_mode;
     float delta = 1.f/60.f;
@@ -94,4 +102,24 @@ public:
     static uint32_t LoadAnimateShader();
 };
 
+class Assets {
+public:
+    static int LoadModel(const char *filename, model_t* model);
+    static int LoadAnimateModel(const char *filename, model_t* model);
+};
+
+class Animator{
+private:
+    float currTime[10] = {0};
+    keyframe_t * prevFrame[10] = {};
+    keyframe_t * nextFrame[10] = {};
+
+    model_t * model;
+    bool playing = false;
+public:
+    explicit Animator(struct model_t * _model):model(_model){};
+    void Update(float delta);
+    void Play();
+    void Stop();
+};
 #endif //GLTFVIEWER_RENDERER_H
