@@ -73,6 +73,7 @@ typedef struct model_t {
     mesh meshes[10];
     uint32_t meshes_size=0;
     mat4 transform{1.0};
+    mat4 animate_transform{1.0};
     int animation_count=0;
     animation_t animations[20];
     int skeleton_count=0;
@@ -120,6 +121,7 @@ public:
     explicit Animator(struct model_t * _model):model(_model){};
     void Update(float delta);
     void Play();
+    void Pause();
     void Stop();
 };
 #endif //GLTFVIEWER_RENDERER_H

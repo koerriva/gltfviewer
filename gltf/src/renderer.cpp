@@ -70,7 +70,12 @@ void Renderer::Render(Camera *camera, model_t* model) {
         SetMaterialParam_float(model->shader,"time",game_time);
         SetMaterialParam_mat4(model->shader,"P", value_ptr(p));
         SetMaterialParam_mat4(model->shader,"V", value_ptr(v));
-        SetMaterialParam_mat4(model->shader,"M", value_ptr(model->transform));
+
+        if(model->animation_count>0){
+            SetMaterialParam_mat4(model->shader,"M", value_ptr(model->animate_transform));
+        }else{
+            SetMaterialParam_mat4(model->shader,"M", value_ptr(model->transform));
+        }
 
         for (int i = 0; i < model->meshes_size; ++i) {
             mesh * mesh = &model->meshes[i];
@@ -93,9 +98,21 @@ void Animator::Play() {
     std::cout << "Play Animation ..." << std::endl;
 }
 
+void Animator::Pause() {
+    playing = false;
+    std::cout << "Pause Animation ..." << std::endl;
+}
+
 void Animator::Stop() {
     playing = false;
     std::cout << "Stop Animation ..." << std::endl;
+    model->animate_transform = mat4{1};
+
+    for (int i = 0; i < 10; ++i) {
+        currTime[i] = 0;
+        prevFrame[i] = nullptr;
+        nextFrame[i] = nullptr;
+    }
 }
 
 void Animator::Update(float delta) {
@@ -128,9 +145,7 @@ void Animator::Update(float delta) {
                 mat4 m = model->transform;
                 m = translate(m,translation);
 
-                glUseProgram(model->shader);
-                SetMaterialParam_mat4(model->shader,"M", value_ptr(m));
-                glUseProgram(0);
+                model->animate_transform = m;
             }
 
             if(animation->channels[i].has_rotation){
@@ -142,9 +157,7 @@ void Animator::Update(float delta) {
                     * rotate(m,angle.y,vec3(0.0,1.0,0.0))
                     * rotate(m,angle.z,vec3(0.0,0.0,1.0));
 
-                glUseProgram(model->shader);
-                SetMaterialParam_mat4(model->shader,"M", value_ptr(m));
-                glUseProgram(0);
+                model->animate_transform = m;
             }
 
             if(animation->channels[i].has_scale){
@@ -152,9 +165,7 @@ void Animator::Update(float delta) {
                 mat4 m = model->transform;
                 m = scale(m,s);
 
-                glUseProgram(model->shader);
-                SetMaterialParam_mat4(model->shader,"M", value_ptr(m));
-                glUseProgram(0);
+                model->animate_transform = m;
             }
 
             currTime[i] += delta;

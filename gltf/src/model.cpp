@@ -172,6 +172,7 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
 
         cgltf_mesh* cmesh = cnode->mesh;
         model->transform = mat4{1};
+        model->animate_transform = mat4{1};
 
         if(cnode->has_translation){
             model->transform = translate(model->transform, make_vec3(cnode->translation));

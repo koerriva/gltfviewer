@@ -34,7 +34,7 @@ int main(int argc,char** argv) {
             }
             renderer->SetRenderMode(mode);
         }
-        if(window->GetKeyPressed(KEY_F2)){
+        if(window->GetKeyPressed(KEY_P)){
             play_animate = !play_animate;
             if(play_animate){
                 animator->Play();
