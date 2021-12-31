@@ -2,7 +2,7 @@
 #include <iostream>
 #include <window.h>
 #include <renderer.h>
-#include <thread>
+//#include <thread>
 
 struct GameState{
     bool running = true;
@@ -18,9 +18,18 @@ int main(int argc,char** argv) {
     auto* camera = new Camera();
 
     int size = sizeof(model_t);
-    model_t* snake = (model_t*)calloc(1,size);
-    Assets::LoadAnimateModel("data/animate_triangle.gltf",snake);
-    Animator* animator = new Animator(snake);
+    auto* models = (model_t*)calloc(2,size);
+    Assets::LoadAnimateModel("data/animate_triangle.gltf",models);
+    model_t* tri = models;
+    tri->transform.scale = vec3(2);
+    tri->animator = new Animator(tri);
+
+    Assets::LoadAnimateModel("data/AnimatedCube/AnimatedCube.gltf",models+1);
+    model_t* cube = models+1;
+    cube->transform.position = vec3(1);
+//    vec3 rot = {radians(45.0f),0,0};
+//    cube->transform.rotation = quat(rot);
+    cube->animator = new Animator(cube);
 
     render_mode mode;
     bool play_animate = false;
@@ -37,21 +46,24 @@ int main(int argc,char** argv) {
         if(window->GetKeyPressed(KEY_P)){
             play_animate = !play_animate;
             if(play_animate){
-                animator->Play();
+                if(cube->animator){
+                    ((Animator*)cube->animator)->Play();
+                }
             } else{
-                animator->Stop();
+                if(cube->animator){
+                    ((Animator*)cube->animator)->Stop();
+                }
             }
         }
 
-        animator->Update(1.0f/60.f);
-        renderer->Render(camera,snake);
+        renderer->Render(camera,models,2);
         window->Update();
 
 //        using namespace std::chrono_literals;
 //        std::this_thread::sleep_for(16ms);
     }
 
-    free(snake);
+    free(models);
     delete window;
     return 0;
 }

@@ -154,7 +154,7 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
 
         std::cout << "Success load : " << filename << std::endl;
     }else{
-        std::cerr << "Can't find file : " << filename << std::endl;
+        std::cout << "Can't find file : " << filename << std::endl;
         return 0;
     }
 
@@ -171,24 +171,19 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
         if(!cnode->mesh)continue;
 
         cgltf_mesh* cmesh = cnode->mesh;
-        model->transform = mat4{1};
-        model->animate_transform = mat4{1};
+        model->transform.position = vec3(0.0);
+        model->transform.rotation = quat(1.0,0.0,0.0,0.0);
+        model->transform.scale = vec3(1.0);
 
         if(cnode->has_translation){
-            model->transform = translate(model->transform, make_vec3(cnode->translation));
+            model->transform.position = make_vec3(cnode->translation);
         }
         if(cnode->has_rotation){
-            quat r = make_quat(cnode->rotation);
-            vec3 angle = eulerAngles(r);
-            model->transform = rotate(model->transform,angle.x,vec3(1.0,0.0,0.0));
-            model->transform = rotate(model->transform,angle.y,vec3(0.0,1.0,0.0));
-            model->transform = rotate(model->transform,angle.z,vec3(0.0,0.0,1.0));
+            model->transform.rotation = make_quat(cnode->rotation);
         }
         if(cnode->has_scale){
-            model->transform = scale(model->transform, make_vec3(cnode->scale));
+            model->transform.scale = make_vec3(cnode->scale);
         }
-
-        std::cout << "Node Mesh : " << cmesh->name << std::endl;
 
         model->meshes_size = cmesh->primitives_count;
         for (int j = 0; j < cmesh->primitives_count; ++j) {
@@ -207,9 +202,7 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
 
             for (int i = 0; i < primitive.attributes_count; ++i) {
                 auto attr = primitive.attributes[i];
-                std::cout << "Attr L : " << attr.name << std::endl;
                 if(strcmp(attr.name,"POSITION")==0){
-                    std::cout << "Attr : " << attr.name << std::endl;
                     position_accessor = attr.data;
                     continue;
                 }
@@ -249,7 +242,7 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
     model->animation_count = data->animations_count;
     for (int i = 0; i < data->animations_count; ++i) {
         cgltf_animation* canimation = &data->animations[i];
-        std::cout << "Animation : " << canimation->name << std::endl;
+        std::cout << "Animation : " << std::endl;
 
         animation_t anim;
         anim.channel_count = canimation->channels_count;
@@ -291,26 +284,22 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
     model->skeleton_count = data->skins_count;
     for (int i = 0; i < data->skins_count; ++i) {
         cgltf_skin* cskin = &data->skins[i];
-        std::cout << "Skin : " << cskin->name << std::endl;
+        std::cout << "Skin : " << std::endl;
 
         skeleton_t skeleton;
         skeleton.joints_count = cskin->joints_count;
         for (int j = 0; j < cskin->joints_count; ++j) {
             cgltf_node* cjoint = cskin->joints[j];
             skeleton.joins[j].id = j;
-            mat4 transform{1.0f};
+            transform_t transform;
             if(cjoint->has_translation){
-                transform = translate(transform, make_vec3(cjoint->translation));
+                transform.position += make_vec3(cjoint->translation);
             }
             if(cjoint->has_rotation){
-                quat r = make_quat(cjoint->rotation);
-                vec3 angle = eulerAngles(r);
-                transform = rotate(transform,angle.x,vec3(1.0,0.0,0.0));
-                transform = rotate(transform,angle.y,vec3(0.0,1.0,0.0));
-                transform = rotate(transform,angle.z,vec3(0.0,0.0,1.0));
+                transform.rotation = make_quat(cjoint->rotation);
             }
             if(cjoint->has_scale){
-                transform = scale(transform, make_vec3(cjoint->scale));
+                transform.scale = make_vec3(cjoint->scale);
             }
             skeleton.joins[j].transform = transform;
         }
