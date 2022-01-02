@@ -27,7 +27,7 @@ int main(int argc,char** argv) {
     Assets::LoadAnimateModel("data/AnimatedCube/AnimatedCube.gltf",models+1);
     model_t* cube = models+1;
     cube->transform.position = vec3(1);
-   vec3 rot = {radians(10.0f),radians(0.0f),radians(0.0f)};
+   vec3 rot = {radians(0.0f),radians(0.0f),radians(10.0f)};
    cube->transform.rotation = quat(rot) * cube->transform.rotation;
     cube->animator = new Animator(cube);
 

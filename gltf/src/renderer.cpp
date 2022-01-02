@@ -157,11 +157,14 @@ void Animator::Update(float delta) {
             if(animation->channels[i].has_rotation){
                 quat origin = origin_transform.rotation;
 
+                float an = angle(origin);
+                vec3 ax = axis(origin);
+
                 quat prev = prevFrame[i]->rotation;
                 quat next = nextFrame[i]->rotation;
 
                 quat rotation = slerp(prev, next,interp);
-                curr_transform.rotation = rotation * origin;
+                curr_transform.rotation = rotate(rotation,an,ax);
             }
 
             if(animation->channels[i].has_scale){
