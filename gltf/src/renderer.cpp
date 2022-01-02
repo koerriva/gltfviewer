@@ -156,15 +156,12 @@ void Animator::Update(float delta) {
 
             if(animation->channels[i].has_rotation){
                 quat origin = origin_transform.rotation;
-                vec3 angle = eulerAngles(origin);
 
-                quat prev = eulerAngles(prevFrame[i]->rotation) * origin;
-                prev = prevFrame[i]->rotation * eulerAngles(origin);
-                quat next = eulerAngles(nextFrame[i]->rotation) * origin;
-                next = nextFrame[i]->rotation * eulerAngles(origin);
+                quat prev = prevFrame[i]->rotation;
+                quat next = nextFrame[i]->rotation;
 
                 quat rotation = slerp(prev, next,interp);
-                curr_transform.rotation = rotation;
+                curr_transform.rotation = rotation * origin;
             }
 
             if(animation->channels[i].has_scale){
@@ -172,7 +169,7 @@ void Animator::Update(float delta) {
                 curr_transform.scale = origin_transform.scale * scale;
             }
 
-            currTime[i] += delta;
+            currTime[i] += 0.001;
         }
 
         model->transform = curr_transform;

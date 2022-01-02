@@ -27,8 +27,8 @@ int main(int argc,char** argv) {
     Assets::LoadAnimateModel("data/AnimatedCube/AnimatedCube.gltf",models+1);
     model_t* cube = models+1;
     cube->transform.position = vec3(1);
-//    vec3 rot = {radians(45.0f),0,0};
-//    cube->transform.rotation = quat(rot);
+   vec3 rot = {radians(10.0f),radians(0.0f),radians(0.0f)};
+   cube->transform.rotation = quat(rot) * cube->transform.rotation;
     cube->animator = new Animator(cube);
 
     render_mode mode;
@@ -49,9 +49,15 @@ int main(int argc,char** argv) {
                 if(cube->animator){
                     ((Animator*)cube->animator)->Play();
                 }
+                if(tri->animator){
+                    ((Animator*)tri->animator)->Play();
+                }
             } else{
                 if(cube->animator){
-                    ((Animator*)cube->animator)->Stop();
+                    ((Animator*)cube->animator)->Pause();
+                }
+                if(tri->animator){
+                    ((Animator*)tri->animator)->Pause();
                 }
             }
         }
