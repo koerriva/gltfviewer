@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include "renderer.h"
 #include "glm/ext.hpp"
+#include "glm/gtx/string_cast.hpp"
 #include "glad/glad.h"
 
 #define TINYGLTF_USE_CPP14
@@ -206,6 +207,8 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
             Accessor* position_accessor = nullptr;
             Accessor* normal_accessor = nullptr;
             Accessor* texcoord_accessor = nullptr;
+            Accessor* joint_accessor = nullptr;
+            Accessor* weight_accessor = nullptr;
             Accessor* indices_accessor = &cmodel.accessors[primitive.indices];
 
             for (auto& attr:primitive.attributes) {
@@ -219,6 +222,14 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
                 }
                 if(attr.first=="TEXCOORD_0"){
                     texcoord_accessor = &cmodel.accessors[attr.second];
+                    continue;
+                }
+                if(attr.first=="JOINTS_0"){
+                    joint_accessor = &cmodel.accessors[attr.second];
+                    continue;
+                }
+                if(attr.first=="WEIGHTS_0"){
+                    weight_accessor = &cmodel.accessors[attr.second];
                     continue;
                 }
             }
@@ -285,6 +296,45 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
                 glGenBuffers(1,&ebo);
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
                 glBufferData(GL_ELEMENT_ARRAY_BUFFER,byte_size,buffer->data.data()+offset,GL_STATIC_DRAW);
+            }
+
+            if(joint_accessor){
+                BufferView* bufferView = &cmodel.bufferViews[joint_accessor->bufferView];
+                Buffer* buffer = &cmodel.buffers[bufferView->buffer];
+
+                int offset = joint_accessor->byteOffset + bufferView->byteOffset;
+                int data_count = joint_accessor->count;
+                std::cout << "joints : " << data_count << std::endl;
+                int byte_size = bufferView->byteLength;
+                int size = sizeof(uint16_t)*4*10;
+                uint16_t * ptr = (uint16_t*)(buffer->data.data()+offset);
+                for (int i = 0; i < 40; ++i) {
+                    std::cout << i  << "_" << *(ptr+i) << std::endl;
+                }
+
+                //joints
+                glGenBuffers(1,&vbo);
+                glBindBuffer(GL_ARRAY_BUFFER,vbo);
+                glBufferData(GL_ARRAY_BUFFER,byte_size,buffer->data.data()+offset,GL_STATIC_DRAW);
+                glEnableVertexAttribArray(3);
+                glVertexAttribPointer(3,4,GL_UNSIGNED_SHORT,GL_FALSE,bufferView->byteStride,nullptr);
+            }
+
+            if(weight_accessor){
+                BufferView* bufferView = &cmodel.bufferViews[weight_accessor->bufferView];
+                Buffer* buffer = &cmodel.buffers[bufferView->buffer];
+
+                int offset = joint_accessor->byteOffset + bufferView->byteOffset;
+                int data_count = joint_accessor->count;
+                std::cout << "weights : " << data_count << std::endl;
+                int byte_size = bufferView->byteLength;
+
+                //weights
+                glGenBuffers(1,&vbo);
+                glBindBuffer(GL_ARRAY_BUFFER,vbo);
+                glBufferData(GL_ARRAY_BUFFER,byte_size,buffer->data.data()+offset,GL_STATIC_DRAW);
+                glEnableVertexAttribArray(4);
+                glVertexAttribPointer(4,4,GL_FLOAT,GL_FALSE,4*sizeof(float),nullptr);
             }
 
             glBindVertexArray(0);

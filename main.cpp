@@ -18,7 +18,7 @@ int main(int argc,char** argv) {
     auto* camera = new Camera();
 
     int size = sizeof(model_t);
-    auto* models = (model_t*)calloc(2,size);
+    auto* models = (model_t*)calloc(3,size);
     Assets::LoadAnimateModel("data/animate_triangle.gltf",models);
     model_t* tri = models;
     tri->transform.scale = vec3(2);
@@ -28,9 +28,12 @@ int main(int argc,char** argv) {
 
     Assets::LoadAnimateModel("data/AnimatedCube/AnimatedCube.gltf",models+1);
     model_t* cube = models+1;
-    cube->transform.position = vec3(1);
+    cube->transform.position = vec3(2);
     cube->transform.rotation = cube->transform.rotation * quat(vec3(radians(10.0f),0.0f,radians(10.0f)));
     cube->animator = new Animator(cube);
+
+    Assets::LoadAnimateModel("data/arm_skin.gltf",models+2);
+    model_t* arm = models+2;
 
     render_mode mode;
     bool play_animate = false;
@@ -63,7 +66,7 @@ int main(int argc,char** argv) {
             }
         }
 
-        renderer->Render(camera,models,2);
+        renderer->Render(camera,models,3);
         window->Update();
 
 //        using namespace std::chrono_literals;

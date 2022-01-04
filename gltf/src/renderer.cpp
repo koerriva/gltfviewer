@@ -196,7 +196,7 @@ void Animator::Update(float delta) {
                 curr_transform.scale = origin_transform.scale * scale;
             }
 
-            currTime[i] += delta;
+            currTime[i] += 0.001f;
         }
 
         model->transform = curr_transform;
