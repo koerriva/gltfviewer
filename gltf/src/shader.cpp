@@ -108,6 +108,7 @@ uint32_t Shader::LoadAnimateShader() {
     const char* vert_shader_source = R"(
     #version 430
     layout (location = 0) in vec3 position;
+    layout (location = 2) in vec2 texcoord;
 
     uniform float time;
 
@@ -115,18 +116,30 @@ uint32_t Shader::LoadAnimateShader() {
     uniform mat4 V;
     uniform mat4 M;
 
+    out vec2 v_TexCoord;
+
     void main(){
         gl_Position = P*V*M*vec4(position,1.0);
+        v_TexCoord = texcoord;
     }
 )";
     const char* frag_shader_source = R"(
     #version 430
 
+    in vec2 v_TexCoord;
+
     out vec4 FragColor;
     uniform vec4 base_color;
 
+    uniform int hasBaseColorTexture;
+    uniform sampler2D baseColorTexture;
+
     void main(){
-        FragColor = vec4(base_color);
+        vec4 diffuse = vec4(1);
+        if(hasBaseColorTexture==1){
+            diffuse = texture(baseColorTexture,v_TexCoord);
+        }
+        FragColor = vec4(base_color*diffuse);
     }
 )";
 

@@ -35,6 +35,10 @@ void SetMaterialParam_float(uint32_t pid,const char* name,float value){
     int location = GetLocation(pid,name);
     glUniform1f(location,value);
 }
+void SetMaterialParam_int(uint32_t pid,const char* name,int value){
+    int location = GetLocation(pid,name);
+    glUniform1i(location,value);
+}
 void SetMaterialParam_mat4(uint32_t pid,const char* name,float* value){
     int location = GetLocation(pid,name);
     glUniformMatrix4fv(location,1,GL_FALSE,value);
@@ -83,11 +87,19 @@ void Renderer::Render(Camera *camera, model_t* models,size_t size) {
         M = calcTransform(M,model->transform);
         SetMaterialParam_mat4(model->shader,"M", value_ptr(M));
 
-        for (int j = 0; j < model->meshes_size; ++j) {
+        SetMaterialParam_int(model->shader,"baseColorTexture",0);
+
+        for (int j = 0; j < model->mesh_count; ++j) {
             mesh * mesh = &model->meshes[j];
             material * mat = &mesh->material;
 
             SetMaterialParam_vec4(model->shader,"base_color", value_ptr(mat->baseColor));
+
+            SetMaterialParam_int(model->shader,"hasBaseColorTexture",mat->hasBaseColorTexture);
+            if(mat->hasBaseColorTexture==1){
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D,mat->baseColorTexture);
+            }
 
             glBindVertexArray(mesh->vao);
             glDrawElements(GL_TRIANGLES,mesh->indices_count,GL_UNSIGNED_SHORT,nullptr);

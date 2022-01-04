@@ -34,6 +34,8 @@ typedef struct transform_t {
 
 typedef struct material {
     vec4 baseColor{1.f};
+    int hasBaseColorTexture = 0;
+    uint32_t baseColorTexture=0;
 } material;
 
 typedef struct mesh {
@@ -77,12 +79,12 @@ typedef struct skeleton_t {
 typedef struct model_t {
     uint32_t shader{};
     mesh meshes[10];
-    uint32_t meshes_size=0;
+    uint32_t mesh_count=0;
     transform_t transform;
     int animation_count=0;
     animation_t animations[20];
     int skeleton_count=0;
-    skeleton_t skeleton[20];
+    skeleton_t skeletons[20];
     void * animator{};
 } model_t;
 
@@ -116,6 +118,7 @@ class Assets {
 public:
     static int LoadModel(const char *filename, model_t* model);
     static int LoadAnimateModel(const char *filename, model_t* model);
+    static uint32_t LoadTexture(ivec3 shape,ivec2 filter,ivec2 warp,const unsigned char *buffer);
 };
 
 class Animator{
