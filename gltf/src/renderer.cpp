@@ -99,6 +99,15 @@ void Renderer::Render(Camera *camera, model_t* models,size_t size) {
     game_time += delta;
 }
 
+Animator::Animator(struct model_t *_model):model(_model) {
+    origin_transform = _model->transform;
+    for (int i = 0; i < MAX_CHANNEL_COUNT; ++i) {
+        currTime[i] = 0;
+        prevFrame[i] = nullptr;
+        nextFrame[i] = nullptr;
+    }
+}
+
 void Animator::Play() {
     playing = true;
     std::cout << "Play Animation ..." << std::endl;
@@ -113,8 +122,7 @@ void Animator::Stop() {
     playing = false;
     std::cout << "Stop Animation ..." << std::endl;
     model->transform = origin_transform;
-
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < MAX_CHANNEL_COUNT; ++i) {
         currTime[i] = 0;
         prevFrame[i] = nullptr;
         nextFrame[i] = nullptr;
@@ -129,22 +137,29 @@ void Animator::Update(float delta) {
         curr_transform = origin_transform;
 
         for (int i = 0; i < animation->channel_count; ++i) {
-            if(currTime[i]>1.0){
-                currTime[i] = 0.0;
-            }
+            keyframe_t* base_keyframe = animation->channels[i].keyframe;
+            int keyframe_count = animation->channels[i].keyframe_count;
 
-            for (int j = 0; j < animation->channels[i].keyframe_count; ++j) {
-                keyframe_t* keyframe = animation->channels[i].keyframe+j;
+            for (int j = 0; j < keyframe_count; ++j) {
+                keyframe_t* keyframe = base_keyframe+j;
                 if(keyframe->time<=currTime[i]){
                     prevFrame[i] = keyframe;
                 }
             }
-            for (int k = 0; k < animation->channels[i].keyframe_count; ++k) {
-                keyframe_t* keyframe = animation->channels[i].keyframe+k;
+
+            bool lastKeyframe = true;
+            for (int k = 0; k < keyframe_count; ++k) {
+                keyframe_t* keyframe = base_keyframe+k;
                 if(keyframe->time>currTime[i]){
                     nextFrame[i] = keyframe;
+                    lastKeyframe = false;
                     break;
                 }
+            }
+
+            if(lastKeyframe){
+                currTime[i]=0.0;
+                nextFrame[i] = base_keyframe;
             }
 
             float interp = (currTime[i] - prevFrame[i]->time)/(nextFrame[i]->time-prevFrame[i]->time);
@@ -157,14 +172,11 @@ void Animator::Update(float delta) {
             if(animation->channels[i].has_rotation){
                 quat origin = origin_transform.rotation;
 
-                float an = angle(origin);
-                vec3 ax = axis(origin);
-
                 quat prev = prevFrame[i]->rotation;
                 quat next = nextFrame[i]->rotation;
 
                 quat rotation = slerp(prev, next,interp);
-                curr_transform.rotation = rotate(rotation,an,ax);
+                curr_transform.rotation = origin * rotation;
             }
 
             if(animation->channels[i].has_scale){
@@ -172,14 +184,14 @@ void Animator::Update(float delta) {
                 curr_transform.scale = origin_transform.scale * scale;
             }
 
-            currTime[i] += 0.001;
+            currTime[i] += delta;
         }
 
         model->transform = curr_transform;
     }
 }
 
-bool Animator::IsPlaying() {
+bool Animator::IsPlaying() const {
     return playing;
 }
 
@@ -191,11 +203,9 @@ mat4 calcTransform(mat4 mat,transform_t transform){
     mat4 M = mat;
 
     mat4 T = translate(M,transform.position);
-    vec3 angle = eulerAngles(transform.rotation);
-    mat4 R = rotate(M,angle.x,vec3(1,0,0))
-             * rotate(M,angle.y,vec3(0,1,0))
-             * rotate(M,angle.z,vec3(0,0,1));
+    mat4 R = mat4_cast(transform.rotation);
     mat4 S = scale(M,transform.scale);
+
     M = T*R*S;
     return M;
 }

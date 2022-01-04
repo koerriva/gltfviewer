@@ -119,24 +119,23 @@ public:
 };
 
 class Animator{
+#define MAX_CHANNEL_COUNT 5
 private:
-    float currTime[10] = {0};
-    keyframe_t * prevFrame[10] = {};
-    keyframe_t * nextFrame[10] = {};
+    float currTime[MAX_CHANNEL_COUNT] = {0};
+    keyframe_t * prevFrame[MAX_CHANNEL_COUNT] = {};
+    keyframe_t * nextFrame[MAX_CHANNEL_COUNT] = {};
 
     model_t * model;
     transform_t origin_transform;
     transform_t curr_transform;
     bool playing = false;
 public:
-    explicit Animator(struct model_t * _model):model(_model){
-        origin_transform = _model->transform;
-    };
+    explicit Animator(struct model_t * _model);
     void Update(float delta);
     void Play();
     void Pause();
     void Stop();
 
-    bool IsPlaying();
+    bool IsPlaying() const;
 };
 #endif //GLTFVIEWER_RENDERER_H

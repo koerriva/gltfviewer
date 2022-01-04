@@ -22,13 +22,14 @@ int main(int argc,char** argv) {
     Assets::LoadAnimateModel("data/animate_triangle.gltf",models);
     model_t* tri = models;
     tri->transform.scale = vec3(2);
+    tri->transform.rotation = vec3(radians(30.f),radians(90.f),radians(0.f));
+    tri->transform.position += vec3(-1,0,-2);
     tri->animator = new Animator(tri);
 
     Assets::LoadAnimateModel("data/AnimatedCube/AnimatedCube.gltf",models+1);
     model_t* cube = models+1;
     cube->transform.position = vec3(1);
-   vec3 rot = {radians(0.0f),radians(0.0f),radians(10.0f)};
-   cube->transform.rotation = quat(rot) * cube->transform.rotation;
+    cube->transform.rotation = cube->transform.rotation * quat(vec3(radians(10.0f),0.0f,radians(10.0f)));
     cube->animator = new Animator(cube);
 
     render_mode mode;
