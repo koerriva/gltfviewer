@@ -81,6 +81,17 @@ void Renderer::Render(Camera *camera, model_t* models,size_t size) {
         if(model->animator){
             ((Animator*) model->animator)->Update(delta);
             is_Playing_Animation = ((Animator*) model->animator)->IsPlaying();
+
+            SetMaterialParam_int(model->shader,"hasSkin",model->has_skin);
+            if(model->has_skin){
+                skeleton_t* skeleton = &model->skeleton;
+                for (int j = 0; j < skeleton->joints_count; ++j) {
+                    mat4 mat = skeleton->inverse_bind_matrices[j];
+                    std::string name = "u_jointMat["+ std::to_string(j)+"]";
+                    mat = calcTransform(mat4{1.0f},skeleton->joins[j].transform);
+                    SetMaterialParam_mat4(model->shader,name.c_str(), value_ptr(mat));
+                }
+            }
         }
 
         mat4 M{1.f};
@@ -90,8 +101,8 @@ void Renderer::Render(Camera *camera, model_t* models,size_t size) {
         SetMaterialParam_int(model->shader,"baseColorTexture",0);
 
         for (int j = 0; j < model->mesh_count; ++j) {
-            mesh * mesh = &model->meshes[j];
-            material * mat = &mesh->material;
+            mesh_t * mesh = &model->meshes[j];
+            material_t * mat = &mesh->material;
 
             SetMaterialParam_vec4(model->shader,"base_color", value_ptr(mat->baseColor));
 
@@ -109,106 +120,6 @@ void Renderer::Render(Camera *camera, model_t* models,size_t size) {
     }
 
     game_time += delta;
-}
-
-Animator::Animator(struct model_t *_model):model(_model) {
-    origin_transform = _model->transform;
-    for (int i = 0; i < MAX_CHANNEL_COUNT; ++i) {
-        currTime[i] = 0;
-        prevFrame[i] = nullptr;
-        nextFrame[i] = nullptr;
-    }
-}
-
-void Animator::Play() {
-    playing = true;
-    std::cout << "Play Animation ..." << std::endl;
-}
-
-void Animator::Pause() {
-    playing = false;
-    std::cout << "Pause Animation ..." << std::endl;
-}
-
-void Animator::Stop() {
-    playing = false;
-    std::cout << "Stop Animation ..." << std::endl;
-    model->transform = origin_transform;
-    for (int i = 0; i < MAX_CHANNEL_COUNT; ++i) {
-        currTime[i] = 0;
-        prevFrame[i] = nullptr;
-        nextFrame[i] = nullptr;
-    }
-}
-
-void Animator::Update(float delta) {
-    if(!playing)return;
-    if(model->animation_count>0){
-        animation_t * animation = model->animations;
-
-        curr_transform = origin_transform;
-
-        for (int i = 0; i < animation->channel_count; ++i) {
-            keyframe_t* base_keyframe = animation->channels[i].keyframe;
-            int keyframe_count = animation->channels[i].keyframe_count;
-
-            for (int j = 0; j < keyframe_count; ++j) {
-                keyframe_t* keyframe = base_keyframe+j;
-                if(keyframe->time<=currTime[i]){
-                    prevFrame[i] = keyframe;
-                }
-            }
-
-            bool lastKeyframe = true;
-            for (int k = 0; k < keyframe_count; ++k) {
-                keyframe_t* keyframe = base_keyframe+k;
-                if(keyframe->time>currTime[i]){
-                    nextFrame[i] = keyframe;
-                    lastKeyframe = false;
-                    break;
-                }
-            }
-
-            if(lastKeyframe){
-                currTime[i]=0.0;
-                nextFrame[i] = base_keyframe;
-            }
-
-            float interp = (currTime[i] - prevFrame[i]->time)/(nextFrame[i]->time-prevFrame[i]->time);
-
-            if(animation->channels[i].has_translation){
-                vec3 translation = mix(prevFrame[i]->translation,nextFrame[i]->translation,interp);
-                curr_transform.position = origin_transform.position + translation;
-            }
-
-            if(animation->channels[i].has_rotation){
-                quat origin = origin_transform.rotation;
-
-                quat prev = prevFrame[i]->rotation;
-                quat next = nextFrame[i]->rotation;
-
-                quat rotation = slerp(prev, next,interp);
-                curr_transform.rotation = origin * rotation;
-            }
-
-            if(animation->channels[i].has_scale){
-                vec3 scale = mix(prevFrame[i]->scale,nextFrame[i]->scale,interp);
-                curr_transform.scale = origin_transform.scale * scale;
-            }
-
-            currTime[i] += 0.001f;
-        }
-
-        model->transform = curr_transform;
-    }
-}
-
-bool Animator::IsPlaying() const {
-    return playing;
-}
-
-mat4 calcTransform(transform_t transform){
-    return calcTransform(mat4{1.0},transform);
 }
 
 mat4 calcTransform(mat4 mat,transform_t transform){

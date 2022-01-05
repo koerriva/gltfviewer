@@ -15,140 +15,6 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "tiny_gltf.h"
 
-int Assets::LoadModel(const char *filename, model_t* model) {
-    using namespace tinygltf;
-
-    Model cmodel;
-    TinyGLTF loader;
-    std::string err;
-    std::string warn;
-
-    bool ret = loader.LoadASCIIFromFile(&cmodel, &err, &warn, filename);
-//bool ret = loader.LoadBinaryFromFile(&model, &err, &warn, argv[1]); // for binary glTF(.glb)
-
-    if (!warn.empty()) {
-        printf("Warn: %s\n", warn.c_str());
-    }
-
-    if (!err.empty()) {
-        printf("Err: %s\n", err.c_str());
-    }
-
-    if (!ret) {
-        printf("Failed to parse glTF\n");
-        return -1;
-    }
-
-    std::cout << "Upload BaseShader ..." << std::endl;
-    uint32_t baseShader = Shader::LoadBaseShader();
-    model->shader = baseShader;
-
-    auto& cmesh = cmodel.meshes[0];
-
-    for (auto& primitive : cmesh.primitives) {
-        mesh mesh;
-
-        std::cout << "Upload Mesh ..." << std::endl;
-
-        glGenVertexArrays(1,&mesh.vao);
-        glBindVertexArray(mesh.vao);
-
-        uint32_t vbo = 0;
-
-
-        std::cout << "Mesh : " << cmesh.name << std::endl;
-
-        Accessor* position_accessor = nullptr;
-        Accessor* normal_accessor = nullptr;
-        Accessor* texcoord_accessor = nullptr;
-        Accessor* indices_accessor = nullptr;
-
-        for (const auto& attr : primitive.attributes) {
-            std::cout << "Attr L : " << attr.first << std::endl;
-            if(attr.first=="POSITION"){
-                std::cout << "Attr : " << attr.first << std::endl;
-                position_accessor = &cmodel.accessors[attr.second];
-                continue;
-            }
-            if(attr.first=="NORMAL"){
-                std::cout << "Attr : " << attr.first << std::endl;
-                normal_accessor = &cmodel.accessors[attr.second];
-                continue;
-            }
-            if(attr.first=="TEXCOORD_0"){
-                std::cout << "Attr : " << attr.first << std::endl;
-                texcoord_accessor = &cmodel.accessors[attr.second];
-                continue;
-            }
-        }
-
-        BufferView* bufferView = nullptr;
-        Buffer* buffer = nullptr;
-        if(position_accessor){
-            bufferView = &cmodel.bufferViews[position_accessor->bufferView];
-            buffer = &cmodel.buffers[bufferView->buffer];
-
-            int offset = position_accessor->byteOffset + bufferView->byteOffset;
-
-            //vertices
-            glGenBuffers(1,&vbo);
-            glBindBuffer(GL_ARRAY_BUFFER,vbo);
-            glBufferData(GL_ARRAY_BUFFER,bufferView->byteLength,buffer->data.data()+offset,GL_STATIC_DRAW);
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,3*sizeof(float),nullptr);
-        }
-        if(normal_accessor){
-            bufferView = &cmodel.bufferViews[normal_accessor->bufferView];
-            buffer = &cmodel.buffers[bufferView->buffer];
-
-            int offset = normal_accessor->byteOffset + bufferView->byteOffset;
-
-            //normals
-            glGenBuffers(1,&vbo);
-            glBindBuffer(GL_ARRAY_BUFFER,vbo);
-            glBufferData(GL_ARRAY_BUFFER,bufferView->byteLength,buffer->data.data()+offset,GL_STATIC_DRAW);
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,3*sizeof(float),nullptr);
-        }
-        if(texcoord_accessor){
-            bufferView = &cmodel.bufferViews[texcoord_accessor->bufferView];
-            buffer = &cmodel.buffers[bufferView->buffer];
-
-            int offset = texcoord_accessor->byteOffset + bufferView->byteOffset;
-
-            //normals
-            glGenBuffers(1,&vbo);
-            glBindBuffer(GL_ARRAY_BUFFER,vbo);
-            glBufferData(GL_ARRAY_BUFFER,bufferView->byteLength,buffer->data.data()+offset,GL_STATIC_DRAW);
-            glEnableVertexAttribArray(2);
-            glVertexAttribPointer(2,2,GL_FLOAT,GL_FALSE,2*sizeof(float),nullptr);
-        }
-        if(indices_accessor){
-            bufferView = &cmodel.bufferViews[indices_accessor->bufferView];
-            buffer = &cmodel.buffers[bufferView->buffer];
-
-            int offset = indices_accessor->byteOffset + bufferView->byteOffset;
-
-            uint32_t ebo = 0 ;
-            glGenBuffers(1,&ebo);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,ebo);
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER,bufferView->byteLength,buffer->data.data()+offset,GL_STATIC_DRAW);
-        }
-        glBindVertexArray(0);
-
-        if(primitive.material>=0){
-            Material* cmat = &cmodel.materials[primitive.material];
-            std::cout << "Upload Material ..." << std::endl;
-            auto& baseColor = cmat->pbrMetallicRoughness.baseColorFactor;
-            mesh.material.baseColor = make_vec4(baseColor.data());
-        }
-
-        model->meshes[model->mesh_count++] = mesh;
-    }
-
-    return 1;
-}
-
 int Assets::LoadAnimateModel(const char *filename, model_t* model) {
     using namespace tinygltf;
 
@@ -177,10 +43,64 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
     uint32_t shader = Shader::LoadAnimateShader();
     model->shader = shader;
 
+    std::unordered_map<int,transform_t*> animate_nodes;
     for (auto& cnode:cmodel.nodes) {
         if(cnode.mesh<0)continue;
 
+        //load skin
+        if(cnode.skin!=-1){
+            Skin& cskin = cmodel.skins[cnode.skin];
+
+            model->has_skin = 1;
+            skeleton_t& skeleton = model->skeleton;
+
+            std::cout << "Skin : " << cskin.name << std::endl;
+
+            for (int i = 0; i < cskin.joints.size(); ++i) {
+                skeleton.inverse_bind_matrices[i] = mat4(1.0f);
+            }
+
+            skeleton.joints_count = 0;
+            for (auto& cjoint_id:cskin.joints) {
+                Node& cjoint = cmodel.nodes[cjoint_id];
+                joint_t& joint = skeleton.joins[skeleton.joints_count++];
+
+                joint.id = cjoint_id;
+                joint.transform.position = vec3(0.0f);
+                joint.transform.rotation = quat(1.0f,0.0,0.0,0.0);
+                joint.transform.scale = vec3(1.0f);
+
+                if(cjoint.translation.size() == 3){
+                    joint.transform.position = make_vec3(cjoint.translation.data());
+                }
+                if(cjoint.rotation.size() == 4){
+                    joint.transform.rotation = make_quat(cjoint.rotation.data());
+                }
+                if(cjoint.scale.size() == 3){
+                    joint.transform.scale = make_vec3(cjoint.scale.data());
+                }
+
+                animate_nodes.insert(std::pair(cjoint_id,&joint.transform));
+            }
+
+            Accessor * accessor = &cmodel.accessors[cskin.inverseBindMatrices];
+            BufferView* bufferView = &cmodel.bufferViews[accessor->bufferView];
+            Buffer* buffer = &cmodel.buffers[bufferView->buffer];
+
+            size_t offset = accessor->byteOffset+bufferView->byteOffset;
+            size_t data_count = accessor->count;
+            auto* ptr = (float*)(buffer->data.data()+offset);
+            for (int i = 0; i < data_count; ++i) {
+                mat4 mat = make_mat4(ptr+i*16);
+//                std::cout << "mat4 " << i << ":" << to_string(mat) << std::endl;
+                mat = mat4{1.0f};
+                skeleton.inverse_bind_matrices[i] = mat;
+            }
+        }
+
+        //load mesh
         Mesh* cmesh = &cmodel.meshes[cnode.mesh];
+        std::cout << "Upload Mesh : " << cmesh->name << std::endl;
         model->transform.position = vec3(0.0);
         model->transform.rotation = quat(1.0,0.0,0.0,0.0);
         model->transform.scale = vec3(1.0);
@@ -195,10 +115,13 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
             model->transform.scale = make_vec3(cnode.scale.data());
         }
 
+        auto idx = std::find(cmodel.nodes.begin(), cmodel.nodes.end(), cnode) - cmodel.nodes.begin();
+        animate_nodes.insert(std::pair(idx,&model->transform));
+
         model->mesh_count = 0;
         for (auto& primitive:cmesh->primitives) {
-            mesh mesh;
-            std::cout << "Upload Mesh ..." << std::endl;
+            mesh_t& mesh = model->meshes[model->mesh_count++];
+            std::cout << "Upload Primitive " << std::endl;
 
             glGenVertexArrays(1,&mesh.vao);
             glBindVertexArray(mesh.vao);
@@ -241,6 +164,7 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
 
                 int offset = position_accessor->byteOffset + bufferView->byteOffset;
                 int data_count = position_accessor->count;
+                std::cout << "vertices : " << data_count << std::endl;
                 int byte_size = bufferView->byteLength;
 
                 //vertices
@@ -303,43 +227,73 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
                 BufferView* bufferView = &cmodel.bufferViews[joint_accessor->bufferView];
                 Buffer* buffer = &cmodel.buffers[bufferView->buffer];
 
-                int offset = joint_accessor->byteOffset + bufferView->byteOffset;
-                int data_count = joint_accessor->count;
+                size_t offset = joint_accessor->byteOffset + bufferView->byteOffset;
+                size_t data_count = joint_accessor->count;
                 std::cout << "joints : " << data_count << std::endl;
-                int byte_size = bufferView->byteLength;
-                int size = sizeof(uint16_t)*4*10;
-                uint16_t * ptr = (uint16_t*)(buffer->data.data()+offset);
-                for (int i = 0; i < 40; ++i) {
-                    std::cout << i  << "_" << *(ptr+i) << std::endl;
+                size_t byte_size = sizeof(uvec4)*data_count;
+
+                std::vector<uint32_t> data;
+
+                if(joint_accessor->componentType==GL_UNSIGNED_SHORT){
+                    auto * ptr = (uint16_t*)(buffer->data.data()+offset);
+                    for (int i = 0; i < data_count; ++i) {
+                        uvec4 indices{*(ptr+i*8),*(ptr+i*8+1),*(ptr+i*8+2),*(ptr+i*8+3)};
+                        uvec4 indices2{*(ptr+i*8+4),*(ptr+i*8+5),*(ptr+i*8+6),*(ptr+i*8+7)};
+                        std::cout << "j " << i << ":" << to_string(indices) << "|" << to_string(indices2) << std::endl;
+                        for (int j = 0; j < 4; ++j) {
+                            data.push_back(*(ptr+i*8+j));
+                        }
+                    }
+                }
+                if(joint_accessor->componentType==GL_UNSIGNED_BYTE){
+                    auto * ptr = (uint8_t*)(buffer->data.data()+offset);
+                    for (int i = 0; i < data_count; ++i) {
+                        uvec4 indices{*(ptr+i*4),*(ptr+i*4+1),*(ptr+i*4+2),*(ptr+i*4+3)};
+                        std::cout << "j " << i << ":" << to_string(indices) << std::endl;
+                        for (int j = 0; j < 4; ++j) {
+                            data.push_back(*(ptr+i*4+j));
+                        }
+                    }
                 }
 
                 //joints
                 glGenBuffers(1,&vbo);
                 glBindBuffer(GL_ARRAY_BUFFER,vbo);
-                glBufferData(GL_ARRAY_BUFFER,byte_size,buffer->data.data()+offset,GL_STATIC_DRAW);
+                glBufferData(GL_ARRAY_BUFFER,byte_size,data.data(),GL_STATIC_DRAW);
                 glEnableVertexAttribArray(3);
-                glVertexAttribPointer(3,4,GL_UNSIGNED_SHORT,GL_FALSE,bufferView->byteStride,nullptr);
+                glVertexAttribIPointer(3,4,GL_UNSIGNED_INT,sizeof(uvec4),nullptr);
             }
 
             if(weight_accessor){
                 BufferView* bufferView = &cmodel.bufferViews[weight_accessor->bufferView];
                 Buffer* buffer = &cmodel.buffers[bufferView->buffer];
 
-                int offset = joint_accessor->byteOffset + bufferView->byteOffset;
-                int data_count = joint_accessor->count;
+                size_t offset = weight_accessor->byteOffset + bufferView->byteOffset;
+                size_t data_count = weight_accessor->count;
                 std::cout << "weights : " << data_count << std::endl;
-                int byte_size = bufferView->byteLength;
+                size_t byte_size = sizeof(vec4)*data_count;
+
+                auto * ptr = (float*)(buffer->data.data()+offset);
+                std::vector<float> data;
+                for (int i = 0; i < data_count; ++i) {
+                    vec4 weights{*(ptr+i*4),*(ptr+i*4+1),*(ptr+i*4+2),*(ptr+i*4+3)};
+                    std::cout << "w" << i << ":" << to_string(weights) << std::endl;
+                    for (int j = 0; j < 4; ++j) {
+                        data.push_back(*(ptr+i*4+j));
+                    }
+                }
 
                 //weights
                 glGenBuffers(1,&vbo);
                 glBindBuffer(GL_ARRAY_BUFFER,vbo);
-                glBufferData(GL_ARRAY_BUFFER,byte_size,buffer->data.data()+offset,GL_STATIC_DRAW);
+                glBufferData(GL_ARRAY_BUFFER,byte_size,data.data(),GL_STATIC_DRAW);
                 glEnableVertexAttribArray(4);
-                glVertexAttribPointer(4,4,GL_FLOAT,GL_FALSE,4*sizeof(float),nullptr);
+                glVertexAttribPointer(4,4,GL_FLOAT,GL_FALSE,sizeof(vec4),nullptr);
             }
 
             glBindVertexArray(0);
 
+            mesh.material.baseColor = vec4(1.0f);
             if(primitive.material>-1){
                 Material* cmat = &cmodel.materials[primitive.material];
                 TextureInfo baseColorTextureInfo = cmat->pbrMetallicRoughness.baseColorTexture;
@@ -362,9 +316,6 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
 
                 mesh.material.baseColor = make_vec4(cmat->pbrMetallicRoughness.baseColorFactor.data());
             }
-
-
-            model->meshes[model->mesh_count++] = mesh;
         }
     }
 
@@ -372,11 +323,16 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
     for (auto& canimation:cmodel.animations) {
         std::cout << "Animation : " << canimation.name << std::endl;
 
-        animation_t anim;
-        anim.channel_count = canimation.channels.size();
-        int j=0;
+        animation_t& anim = model->animations[model->animation_count++];
+        memset(anim.name,'\0',sizeof(anim.name));
+        if(canimation.name.empty()){
+            strcpy(anim.name,"default");
+        }else{
+            strcpy(anim.name,canimation.name.data());
+        }
+        anim.channel_count = 0;
         for (auto& cchannel:canimation.channels) {
-            auto& channel = anim.channels[j];
+            auto& channel = anim.channels[anim.channel_count++];
             AnimationSampler* sampler = &canimation.samplers[cchannel.sampler];
             channel.interpolation = 0;
             if(sampler->interpolation=="STEP"){
@@ -385,6 +341,8 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
             if(sampler->interpolation=="CUBIC"){
                 channel.interpolation = 2;
             }
+
+            channel.transform = animate_nodes[cchannel.target_node];
 
             Accessor* input = &cmodel.accessors[sampler->input];
             BufferView* inputBufferView = &cmodel.bufferViews[input->bufferView];
@@ -399,6 +357,9 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
                 auto& keyframe = channel.keyframe[k];
 
                 keyframe.time = *((float*)(inputBuffer->data.data() + input->byteOffset + inputBufferView->byteOffset) + k);
+                keyframe.translation = vec3(0.0f);
+                keyframe.rotation = quat(1.0f,0.0f,0.0f,0.0f);
+                keyframe.scale = vec3(1.0f);
 
                 if(cchannel.target_path=="translation"){
                     channel.has_translation = true;
@@ -412,44 +373,9 @@ int Assets::LoadAnimateModel(const char *filename, model_t* model) {
                     channel.has_scale = true;
                     keyframe.scale = make_vec3((float*)(outputBuffer->data.data()+output->byteOffset+outputBufferView->byteOffset) + k*3);
                 }
-
-                channel.keyframe[k] = keyframe;
             }
-
-            j++;
         }
-
-        model->animations[model->animation_count++] = anim;
     }
-
-    model->skeleton_count = 0;
-//    for (int i = 0; i < data->skins_count; ++i) {
-//        cgltf_skin* cskin = &data->skins[i];
-//        std::cout << "Skin : " << std::endl;
-//
-//        skeleton_t skeleton;
-//        skeleton.joints_count = cskin->joints_count;
-//        for (int j = 0; j < cskin->joints_count; ++j) {
-//            cgltf_node* cjoint = cskin->joints[j];
-//            skeleton.joins[j].id = j;
-//            transform_t transform;
-//            if(cjoint->has_translation){
-//                transform.position += make_vec3(cjoint->translation);
-//            }
-//            if(cjoint->has_rotation){
-//                transform.rotation = make_quat(cjoint->rotation);
-//            }
-//            if(cjoint->has_scale){
-//                transform.scale = make_vec3(cjoint->scale);
-//            }
-//            skeleton.joins[j].transform = transform;
-//        }
-//
-//        cgltf_accessor * accessor = cskin->inverse_bind_matrices;
-//        for (int j = 0; j < accessor->count; ++j) {
-////            float* buffer
-//        }
-//    }
 
     return 1;
 }

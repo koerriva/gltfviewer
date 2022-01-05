@@ -32,17 +32,17 @@ typedef struct transform_t {
     vec3 scale{1};
 } transform_t;
 
-typedef struct material {
+typedef struct material_t {
     vec4 baseColor{1.f};
     int hasBaseColorTexture = 0;
     uint32_t baseColorTexture=0;
-} material;
+} material_t;
 
-typedef struct mesh {
+typedef struct mesh_t {
     uint32_t vao{};
     int indices_count = 0;
-    material material{};
-} mesh;
+    material_t material{};
+} mesh_t;
 
 typedef struct keyframe_t {
     float time = 0;
@@ -58,11 +58,13 @@ typedef struct channel_t {
     bool has_translation = false;
     bool has_rotation = false;
     bool has_scale = false;
+    transform_t* transform = nullptr;
 } channel_t;
 
 typedef struct animation_t {
     int channel_count = 0;
-    channel_t channels[5]{};
+    channel_t channels[40]{};
+    char name[20]{0};
 } animation_t;
 
 typedef struct joint_t {
@@ -70,25 +72,25 @@ typedef struct joint_t {
     transform_t transform{};
 } joint_t;
 
+#define MAX_JOINT_COUNT 64
 typedef struct skeleton_t {
     int joints_count = 0;
-    mat4 inverse_bind_matrices[64]{};
-    joint_t joins[64];
+    joint_t joins[MAX_JOINT_COUNT];
+    mat4 inverse_bind_matrices[MAX_JOINT_COUNT]{};
 } skeleton_t;
 
 typedef struct model_t {
     uint32_t shader{};
-    mesh meshes[10];
+    mesh_t meshes[10];
     uint32_t mesh_count=0;
-    transform_t transform;
+    transform_t transform{};
     int animation_count=0;
     animation_t animations[20];
-    int skeleton_count=0;
-    skeleton_t skeletons[20];
+    int has_skin = 0;
+    skeleton_t skeleton;
     void * animator{};
 } model_t;
 
-mat4 calcTransform(transform_t transform);
 mat4 calcTransform(mat4 mat,transform_t transform);
 
 enum render_mode {
@@ -116,26 +118,27 @@ public:
 
 class Assets {
 public:
-    static int LoadModel(const char *filename, model_t* model);
     static int LoadAnimateModel(const char *filename, model_t* model);
     static uint32_t LoadTexture(ivec3 shape,ivec2 filter,ivec2 warp,const unsigned char *buffer);
 };
 
 class Animator{
+#define MAX_ANIMATION_COUNT 10
 #define MAX_CHANNEL_COUNT 5
 private:
-    float currTime[MAX_CHANNEL_COUNT] = {0};
-    keyframe_t * prevFrame[MAX_CHANNEL_COUNT] = {};
-    keyframe_t * nextFrame[MAX_CHANNEL_COUNT] = {};
+    float currTime[MAX_ANIMATION_COUNT][MAX_CHANNEL_COUNT] = {0};
+    keyframe_t * prevFrame[MAX_ANIMATION_COUNT][MAX_CHANNEL_COUNT] = {};
+    keyframe_t * nextFrame[MAX_ANIMATION_COUNT][MAX_CHANNEL_COUNT] = {};
 
     model_t * model;
-    transform_t origin_transform;
-    transform_t curr_transform;
+    transform_t origin_transform[MAX_ANIMATION_COUNT][MAX_CHANNEL_COUNT] = {};
     bool playing = false;
+    const char* playingAnimation = nullptr;
 public:
     explicit Animator(struct model_t * _model);
     void Update(float delta);
     void Play();
+    void Play(const char* name);
     void Pause();
     void Stop();
 

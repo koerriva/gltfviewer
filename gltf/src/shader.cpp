@@ -109,8 +109,12 @@ uint32_t Shader::LoadAnimateShader() {
     #version 430
     layout (location = 0) in vec3 position;
     layout (location = 2) in vec2 texcoord;
+    layout (location = 3) in uvec4 a_joint;
+    layout (location = 4) in vec4 a_weight;
 
     uniform float time;
+    uniform mat4 u_jointMat[64];
+    uniform int hasSkin;
 
     uniform mat4 P;
     uniform mat4 V;
@@ -119,7 +123,17 @@ uint32_t Shader::LoadAnimateShader() {
     out vec2 v_TexCoord;
 
     void main(){
-        gl_Position = P*V*M*vec4(position,1.0);
+        mat4 modelMat = M;
+        if(hasSkin==1){
+            mat4 skinMat =
+                a_weight.x * u_jointMat[int(a_joint.x)] +
+                a_weight.y * u_jointMat[int(a_joint.y)] +
+                a_weight.z * u_jointMat[int(a_joint.z)] +
+                a_weight.w * u_jointMat[int(a_joint.w)];
+            modelMat = M * skinMat;
+        }
+
+        gl_Position = P*V*modelMat*vec4(position,1.0);
         v_TexCoord = texcoord;
     }
 )";
