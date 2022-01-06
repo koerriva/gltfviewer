@@ -40,13 +40,12 @@ int main(int argc,char** argv) {
 //    snake->transform.position = vec3(0,-1,0);
 //    snake->transform.scale = vec3(0.8);
 
-    object_t* fox = Assets::LoadAnimateModel("data/Fox/Fox.gltf",scene);
-    fox->transform.position = vec3(0,-1,0);
-    fox->transform.scale = vec3(0.1);
+//    object_t* fox = Assets::LoadAnimateModel("data/Fox/Fox.gltf",scene);
+//    fox->transform.position = vec3(0,-1,0);
+//    fox->transform.scale = vec3(0.1);
 
-//    object_t* arm = Assets::LoadAnimateModel("data/arm_skin.gltf",scene);
-//    arm->transform.position = vec3(0,-1,0);
-//    arm->transform.scale = vec3(0.8);
+    object_t* arm = Assets::LoadAnimateModel("data/arm_skin.gltf",scene);
+    arm->transform.position += vec3(0.0f,-1.0f,0.0f);
 
     render_mode mode;
     bool play_animate = false;

@@ -20,7 +20,7 @@ public:
     mat4 GetProjection();
 
 private:
-    vec3 position{-5.f,2.f,3.f};
+    vec3 position{0.f,0.f,5.f};
     vec3 target{0.f};
     vec3 up{0.f,1.0f,0.0f};
     float z_near = 0.1f;
@@ -125,7 +125,8 @@ typedef struct scene_t {
     Camera* camera = nullptr;
 } scene_t;
 
-mat4 calcTransform(mat4 mat,object_t* object);
+mat4 getLocalTransform(object_t* object);
+mat4 getGlobalTransform(object_t* object);
 
 enum render_mode {
     shader,wireframe

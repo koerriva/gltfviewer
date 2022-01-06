@@ -115,6 +115,9 @@ model_t* trav_get_model(scene_t* scene,tinygltf::Model* cmodel,object_t* node,in
             glVertexAttribPointer(2,2,GL_FLOAT,GL_FALSE,2*sizeof(float),nullptr);
         }
 
+        if(primitive.indices>=0){
+            indices_accessor = &cmodel->accessors[primitive.indices];
+        }
         if(indices_accessor){
             BufferView* bufferView = &cmodel->bufferViews[indices_accessor->bufferView];
             Buffer* buffer = &cmodel->buffers[bufferView->buffer];
@@ -139,10 +142,6 @@ model_t* trav_get_model(scene_t* scene,tinygltf::Model* cmodel,object_t* node,in
             size_t data_count = joint_accessor->count;
             std::cout << "joints : " << data_count << std::endl;
             size_t byte_size = sizeof(uvec4)*data_count;
-
-            int data_component = joint_accessor->componentType;
-            int byte_stride = joint_accessor->ByteStride(*bufferView);
-            byte_size = bufferView->byteLength;
 
             std::vector<uint32_t> data;
 
@@ -172,9 +171,9 @@ model_t* trav_get_model(scene_t* scene,tinygltf::Model* cmodel,object_t* node,in
             //joints
             glGenBuffers(1,&vbo);
             glBindBuffer(GL_ARRAY_BUFFER,vbo);
-            glBufferData(GL_ARRAY_BUFFER,byte_size,buffer->data.data()+offset,GL_STATIC_DRAW);
+            glBufferData(GL_ARRAY_BUFFER,byte_size,data.data(),GL_STATIC_DRAW);
             glEnableVertexAttribArray(3);
-            glVertexAttribPointer(3,4,GL_UNSIGNED_INT,GL_FALSE,byte_stride,nullptr);
+            glVertexAttribIPointer(3,4,GL_UNSIGNED_INT,sizeof(uvec4),nullptr);
         }
 
         if(weight_accessor){

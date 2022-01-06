@@ -93,15 +93,16 @@ void Renderer::Render(scene_t* scene) {
         if(object->has_skin){
             skeleton_t* skeleton = object->skeleton;
             for (int j = 0; j < skeleton->joints_count; ++j) {
-                mat4 mat = skeleton->inverse_bind_matrices[j];
+                mat4 inverse_mat = skeleton->inverse_bind_matrices[j];
+                mat4 joint_mat = getGlobalTransform(skeleton->joins[j]);
+                joint_mat = joint_mat*inverse_mat;
+
                 std::string name = "u_jointMat["+ std::to_string(j)+"]";
-                mat = calcTransform(mat,skeleton->joins[j]);
-                SetMaterialParam_mat4(scene->shader,name.c_str(), value_ptr(mat));
+                SetMaterialParam_mat4(scene->shader,name.c_str(), value_ptr(joint_mat));
             }
         }
 
-        mat4 M{1.f};
-        M = calcTransform(M,object);
+        mat4 M = getGlobalTransform(object);
         SetMaterialParam_mat4(scene->shader,"M", value_ptr(M));
 
         SetMaterialParam_int(scene->shader,"baseColorTexture",0);
@@ -142,8 +143,11 @@ mat4 calcTransform(transform_t* transform){
     return M;
 }
 
-mat4 calcTransform(mat4 mat,object_t* object){
-    mat4 M = mat;
+mat4 getLocalTransform(object_t* object){
+    return calcTransform(&object->transform);
+}
+
+mat4 getGlobalTransform(object_t* object){
 
     transform_t * transform = &(object->animated?object->animated_transform:object->transform);
     mat4 local = calcTransform(transform);
@@ -164,6 +168,5 @@ mat4 calcTransform(mat4 mat,object_t* object){
         global *= calcTransform(parent_transforms[i-1]);
     }
 
-    M = global * local * M;
-    return M;
+    return global * local;
 }
