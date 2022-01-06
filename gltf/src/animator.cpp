@@ -4,28 +4,12 @@
 #include <iostream>
 #include "renderer.h"
 
-Animator::Animator(struct model_t *_model):model(_model) {
-    for (int i = 0; i < MAX_ANIMATION_COUNT; ++i) {
-        for (int j = 0; j < MAX_CHANNEL_COUNT; ++j) {
-            currTime[i][j] = 0;
-            prevFrame[i][j] = nullptr;
-            nextFrame[i][j] = nullptr;
-
-            if(i<model->animation_count){
-                animation_t * animation = model->animations + i;
-                if(j<animation->channel_count){
-                    channel_t * channel = animation->channels + j;
-
-                    origin_transform[i][j] = *channel->transform;
-                }
-            }
-        }
-    }
+Animator::Animator(struct object_t *_model):model(_model) {
 }
 
 void Animator::Play() {
     playing = true;
-    playingAnimation = "default";
+    playingAnimation = "";
     std::cout << "Play Animation [Default]" << std::endl;
 }
 
@@ -42,11 +26,12 @@ void Animator::Pause() {
 
 void Animator::Stop() {
     playing = false;
-    playingAnimation = "default";
+    playingAnimation = "";
     std::cout << "Stop Animation ..." << std::endl;
     for (int i = 0; i < MAX_ANIMATION_COUNT; ++i) {
+        currTime[i] = 0;//时间同步
         for (int j = 0; j < MAX_CHANNEL_COUNT; ++j) {
-            currTime[i][j] = 0;
+
             prevFrame[i][j] = nullptr;
             nextFrame[i][j] = nullptr;
 
@@ -55,7 +40,7 @@ void Animator::Stop() {
                 if(j<animation->channel_count){
                     channel_t * channel = animation->channels + j;
 
-                    *channel->transform = origin_transform[i][j];
+                    channel->target->animated = false;
                 }
             }
         }
@@ -66,7 +51,16 @@ void Animator::Update(float delta) {
     if(!playing)return;
     for (int i = 0; i < model->animation_count; ++i) {
         animation_t * animation = model->animations + i;
-        if(strcmp(playingAnimation,animation->name)!=0)continue;
+
+        bool isPlayThisAnimation;
+        isPlayThisAnimation = strcmp(playingAnimation,animation->name)==0;
+        isPlayThisAnimation = isPlayThisAnimation || strcmp(playingAnimation, "") == 0 && i == 0;
+
+        if(!isPlayThisAnimation){
+            continue;
+        }
+
+        int finished_channel = 0;
 
         for (int j = 0; j < animation->channel_count; ++j) {
             channel_t* channel = animation->channels+j;
@@ -75,15 +69,19 @@ void Animator::Update(float delta) {
 
             for (int k = 0; k < keyframe_count; ++k) {
                 keyframe_t* keyframe = base_keyframe+k;
-                if(keyframe->time<=currTime[i][j]){
+                if(keyframe->time<=currTime[i]){
                     prevFrame[i][j] = keyframe;
                 }
+            }
+
+            if(prevFrame[i][j] == nullptr){
+                prevFrame[i][j] = new keyframe_t ;
             }
 
             bool lastKeyframe = true;
             for (int k = 0; k < keyframe_count; ++k) {
                 keyframe_t* keyframe = base_keyframe+k;
-                if(keyframe->time>currTime[i][j]){
+                if(keyframe->time>currTime[i]){
                     nextFrame[i][j] = keyframe;
                     lastKeyframe = false;
                     break;
@@ -91,35 +89,51 @@ void Animator::Update(float delta) {
             }
 
             if(lastKeyframe){
-                currTime[i][j] = 0.0;
-                nextFrame[i][j] = base_keyframe;
+                finished_channel++;
+                continue;
             }
 
             //linear
-            float interp = (currTime[i][j] - prevFrame[i][j]->time)/(nextFrame[i][j]->time-prevFrame[i][j]->time);
+            float interp = (currTime[i] - prevFrame[i][j]->time)/(nextFrame[i][j]->time-prevFrame[i][j]->time);
+
+            channel->target->animated_transform = channel->target->transform;
 
             if(channel->has_translation){
                 vec3 translation = mix(prevFrame[i][j]->translation,nextFrame[i][j]->translation,interp);
-                channel->transform->position = origin_transform[i][j].position + translation;
+                vec3 origin = channel->target->transform.position;
+                channel->target->animated_transform.position = origin + translation;
+                channel->target->animated = true;
             }
 
             if(channel->has_rotation){
-                quat origin = origin_transform[i][j].rotation;
+                quat origin = channel->target->transform.rotation;
 
                 quat prev = prevFrame[i][j]->rotation;
                 quat next = nextFrame[i][j]->rotation;
 
                 quat rotation = slerp(prev, next,interp);
-                channel->transform->rotation = origin * rotation;
+                channel->target->animated_transform.rotation = origin * rotation;
+                channel->target->animated = true;
             }
 
             if(channel->has_scale){
                 vec3 scale = mix(prevFrame[i][j]->scale,nextFrame[i][j]->scale,interp);
-                channel->transform->scale = origin_transform[i][j].scale * scale;
+                vec3 origin = channel->target->transform.scale;
+                channel->target->animated_transform.scale = origin * scale;
+                channel->target->animated = true;
             }
-
-            currTime[i][j] += delta;
         }
+
+        if(finished_channel>=animation->channel_count){
+            currTime[i] = 0.0;
+            for (int j = 0; j < animation->channel_count; ++j){
+                prevFrame[i][j] = nullptr;
+                nextFrame[i][j] = nullptr;
+            }
+            continue;
+        }
+
+        currTime[i] += delta;
     }
 }
 

@@ -15,35 +15,38 @@ int main(int argc,char** argv) {
     window->OnClose(&state.running);
 
     auto* renderer = new Renderer();
-    auto* camera = new Camera();
 
-    int size = sizeof(model_t);
-    auto* models = (model_t*)calloc(4,size);
+    std::cout << "Load AnimateShader ..." << std::endl;
+    uint32_t animateShader = Shader::LoadAnimateShader();
+    auto* scene = new scene_t;
+    scene->shader = animateShader;
+    scene->camera = new Camera();
 
-//    Assets::LoadAnimateModel("data/animate_triangle.gltf",models);
-//    model_t* tri = models;
+//    object_t * tri = Assets::LoadAnimateModel("data/animate_triangle.gltf",scene);
 //    tri->transform.scale = vec3(2);
-//    tri->transform.rotation = vec3(radians(0.f),radians(0.f),radians(0.f));
-//    tri->transform.position += vec3(-1,0,-2);
-//    tri->animator = new Animator(tri);
-//
-//    Assets::LoadAnimateModel("data/AnimatedCube/AnimatedCube.gltf",models+1);
-//    model_t* cube = models+1;
-//    cube->transform.position = vec3(2);
-//    cube->transform.rotation = cube->transform.rotation * quat(vec3(radians(10.0f),0.0f,radians(10.0f)));
-//    cube->animator = new Animator(cube);
-//
-    Assets::LoadAnimateModel("data/BoxAnimated.gltf",models+1);
-    model_t* arm = models+1;
-    arm->transform.position += vec3(-1,1,0);
-    arm->transform.scale = vec3(0.5);
-    arm->animator = new Animator(arm);
+//    tri->transform.position += vec3(-2,0,-2);
 
-    Assets::LoadAnimateModel("data/Snake.gltf",models);
-    model_t* snake = models;
-    snake->transform.position += vec3(1,-1,0);
-    snake->transform.scale = vec3(0.5);
-    snake->animator = new Animator(snake);
+//    object_t * cube = Assets::LoadAnimateModel("data/AnimatedCube/AnimatedCube.gltf",scene);
+//    cube->transform.position = vec3(3,1,1);
+//    cube->transform.scale = vec3(0.5);
+//    cube->transform.rotation *= quat(vec3(radians(10.0f),0.0f,radians(-10.0f)));
+
+//    object_t* box = Assets::LoadAnimateModel("data/BoxAnimated.gltf",scene);
+//    box->transform.position = vec3(0,1,0);
+//    box->transform.scale = vec3(0.5);
+//    box->transform.rotation *= quat(vec3(0.0f,0.0f, radians(30.0f)));
+
+//    object_t* snake = Assets::LoadAnimateModel("data/Snake.gltf",scene);
+//    snake->transform.position = vec3(0,-1,0);
+//    snake->transform.scale = vec3(0.8);
+
+    object_t* fox = Assets::LoadAnimateModel("data/Fox/Fox.gltf",scene);
+    fox->transform.position = vec3(0,-1,0);
+    fox->transform.scale = vec3(0.1);
+
+//    object_t* arm = Assets::LoadAnimateModel("data/arm_skin.gltf",scene);
+//    arm->transform.position = vec3(0,-1,0);
+//    arm->transform.scale = vec3(0.8);
 
     render_mode mode;
     bool play_animate = false;
@@ -59,58 +62,31 @@ int main(int argc,char** argv) {
         }
         if(window->GetKeyPressed(KEY_P)){
             play_animate = !play_animate;
-            if(play_animate){
-//                if(cube->animator){
-//                    ((Animator*)cube->animator)->Play();
-//                }
-//                if(tri->animator){
-//                    ((Animator*)tri->animator)->Play();
-//                }
-                if(arm->animator){
-                    ((Animator*)arm->animator)->Play();
-                }
-                if(snake->animator){
-                    ((Animator*)snake->animator)->Play("Snake_Idle");
-                }
-            } else{
-//                if(cube->animator){
-//                    ((Animator*)cube->animator)->Pause();
-//                }
-//                if(tri->animator){
-//                    ((Animator*)tri->animator)->Pause();
-//                }
-                if(arm->animator){
-                    ((Animator*)arm->animator)->Pause();
-                }
-                if(snake->animator){
-                    ((Animator*)snake->animator)->Pause();
+            for (int i = 0; i < scene->root_count; ++i) {
+                object_t* root = scene->roots[i];
+                if(play_animate){
+                    root->animator->Play();
+                }else{
+                    root->animator->Pause();
                 }
             }
         }
         if(window->GetKeyPressed(KEY_S)){
             play_animate = false;
-//            if(cube->animator){
-//                ((Animator*)cube->animator)->Stop();
-//            }
-//            if(tri->animator){
-//                ((Animator*)tri->animator)->Stop();
-//            }
-            if(arm->animator){
-                ((Animator*)arm->animator)->Stop();
-            }
-            if(snake->animator){
-                ((Animator*)snake->animator)->Stop();
+            for (int i = 0; i < scene->root_count; ++i) {
+                object_t* root = scene->roots[i];
+                root->animator->Stop();
             }
         }
 
-        renderer->Render(camera,models,2);
+        renderer->Render(scene);
         window->Update();
 
 //        using namespace std::chrono_literals;
 //        std::this_thread::sleep_for(16ms);
     }
 
-    free(models);
+    delete scene;
     delete window;
     return 0;
 }

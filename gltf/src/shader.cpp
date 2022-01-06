@@ -109,7 +109,7 @@ uint32_t Shader::LoadAnimateShader() {
     #version 430
     layout (location = 0) in vec3 position;
     layout (location = 2) in vec2 texcoord;
-    layout (location = 3) in uvec4 a_joint;
+    layout (location = 3) in vec4 a_joint;
     layout (location = 4) in vec4 a_weight;
 
     uniform float time;
@@ -130,7 +130,7 @@ uint32_t Shader::LoadAnimateShader() {
                 a_weight.y * u_jointMat[int(a_joint.y)] +
                 a_weight.z * u_jointMat[int(a_joint.z)] +
                 a_weight.w * u_jointMat[int(a_joint.w)];
-            modelMat = M * skinMat;
+            modelMat = skinMat * M;
         }
 
         gl_Position = P*V*modelMat*vec4(position,1.0);

@@ -5,6 +5,7 @@
 #ifndef GLTFVIEWER_RENDERER_H
 #define GLTFVIEWER_RENDERER_H
 
+#include <vector>
 #include "glm/glm.hpp"
 #include "glm/ext.hpp"
 
@@ -40,6 +41,7 @@ typedef struct material_t {
 
 typedef struct mesh_t {
     uint32_t vao{};
+    int vertices_count = 0;
     int indices_count = 0;
     material_t material{};
 } mesh_t;
@@ -51,47 +53,79 @@ typedef struct keyframe_t {
     vec3 scale{1};
 } keyframe_t;
 
+#define MAX_KEYFRAME_COUNT 120
+
 typedef struct channel_t {
     int keyframe_count = 0;
-    keyframe_t keyframe[60]{};
+    keyframe_t keyframe[120]{};
     int interpolation = 0;//0-liber,1-step,2-cubic
     bool has_translation = false;
     bool has_rotation = false;
     bool has_scale = false;
-    transform_t* transform = nullptr;
+    struct object_t* target = nullptr;
+    transform_t origin;
 } channel_t;
 
 typedef struct animation_t {
     int channel_count = 0;
     channel_t channels[40]{};
-    char name[20]{0};
+    char name[45]{0};
 } animation_t;
-
-typedef struct joint_t {
-    int id{};
-    transform_t transform{};
-} joint_t;
 
 #define MAX_JOINT_COUNT 64
 typedef struct skeleton_t {
     int joints_count = 0;
-    joint_t joins[MAX_JOINT_COUNT];
+    object_t* joins[MAX_JOINT_COUNT] = {nullptr};
     mat4 inverse_bind_matrices[MAX_JOINT_COUNT]{};
 } skeleton_t;
 
 typedef struct model_t {
-    uint32_t shader{};
     mesh_t meshes[10];
     uint32_t mesh_count=0;
-    transform_t transform{};
-    int animation_count=0;
-    animation_t animations[20];
-    int has_skin = 0;
-    skeleton_t skeleton;
-    void * animator{};
 } model_t;
 
-mat4 calcTransform(mat4 mat,transform_t transform);
+typedef struct object_t {
+    int id=-1;
+    char name[45] = {0};
+
+    transform_t transform;
+    int animated = 0;
+    transform_t animated_transform;
+
+    int has_model = 0;
+    model_t * model = nullptr;
+
+    int has_skin = 0;
+    skeleton_t * skeleton = nullptr;
+
+    int has_camera = 0;
+    Camera* camera = nullptr;
+
+    int has_animation = 0;
+    int animation_count=0;
+    animation_t animations[20];
+    class Animator* animator = nullptr;
+
+    int children_count = 0;
+    object_t* children[1024]={nullptr};
+    object_t* parent = nullptr;
+} object_t;
+
+typedef struct scene_t {
+    int object_count = 0;
+    object_t objects[1024];
+
+    int model_count = 0;
+    object_t * models[1024]={nullptr};
+
+    int root_count = 0;
+    object_t * roots[1024]={nullptr};
+
+    uint32_t shader = 0;
+    Camera* camera = nullptr;
+} scene_t;
+
+mat4 calcTransform(mat4 mat,object_t* object);
 
 enum render_mode {
     shader,wireframe
@@ -102,7 +136,7 @@ public:
     Renderer();
     ~Renderer() = default;
 
-    void Render(Camera* camera, model_t* models, size_t size);
+    void Render(scene_t* scene);
     void SetRenderMode(render_mode mode);
 private:
     render_mode m_mode;
@@ -118,7 +152,7 @@ public:
 
 class Assets {
 public:
-    static int LoadAnimateModel(const char *filename, model_t* model);
+    static object_t * LoadAnimateModel(const char *filename, scene_t* scene);
     static uint32_t LoadTexture(ivec3 shape,ivec2 filter,ivec2 warp,const unsigned char *buffer);
 };
 
@@ -126,16 +160,15 @@ class Animator{
 #define MAX_ANIMATION_COUNT 10
 #define MAX_CHANNEL_COUNT 5
 private:
-    float currTime[MAX_ANIMATION_COUNT][MAX_CHANNEL_COUNT] = {0};
+    float currTime[MAX_ANIMATION_COUNT] = {0};
     keyframe_t * prevFrame[MAX_ANIMATION_COUNT][MAX_CHANNEL_COUNT] = {};
     keyframe_t * nextFrame[MAX_ANIMATION_COUNT][MAX_CHANNEL_COUNT] = {};
 
-    model_t * model;
-    transform_t origin_transform[MAX_ANIMATION_COUNT][MAX_CHANNEL_COUNT] = {};
+    object_t * model;
     bool playing = false;
     const char* playingAnimation = nullptr;
 public:
-    explicit Animator(struct model_t * _model);
+    explicit Animator(struct object_t * _model);
     void Update(float delta);
     void Play();
     void Play(const char* name);

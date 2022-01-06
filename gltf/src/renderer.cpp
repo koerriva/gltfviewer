@@ -52,8 +52,10 @@ void Renderer::SetRenderMode(render_mode mode) {
     this->m_mode = mode;
 }
 
-void Renderer::Render(Camera *camera, model_t* models,size_t size) {
+void Renderer::Render(scene_t* scene) {
     glEnable(GL_DEPTH_TEST);
+
+    Camera* camera = scene->camera;
 
     auto p = camera->GetProjection();
     auto v = camera->GetViewMatrix();
@@ -69,66 +71,99 @@ void Renderer::Render(Camera *camera, model_t* models,size_t size) {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
 
-    for (size_t i = 0; i < size; ++i) {
-        model_t* model = models+i;
+    glUseProgram(scene->shader);
 
-        glUseProgram(model->shader);
-        SetMaterialParam_float(model->shader,"time",game_time);
-        SetMaterialParam_mat4(model->shader,"P", value_ptr(p));
-        SetMaterialParam_mat4(model->shader,"V", value_ptr(v));
+    //animation
+    for (int i = 0; i < scene->root_count; ++i) {
+        object_t* object = scene->roots[i];
+        if(object->has_animation==1){
+            object->animator->Update(delta);
+        }
+    }
 
-        bool is_Playing_Animation = false;
-        if(model->animator){
-            ((Animator*) model->animator)->Update(delta);
-            is_Playing_Animation = ((Animator*) model->animator)->IsPlaying();
+    for (size_t i = 0; i < scene->model_count; ++i) {
+        object_t* object = scene->models[i];
+        model_t* model = object->model;
 
-            SetMaterialParam_int(model->shader,"hasSkin",model->has_skin);
-            if(model->has_skin){
-                skeleton_t* skeleton = &model->skeleton;
-                for (int j = 0; j < skeleton->joints_count; ++j) {
-                    mat4 mat = skeleton->inverse_bind_matrices[j];
-                    std::string name = "u_jointMat["+ std::to_string(j)+"]";
-                    mat = calcTransform(mat4{1.0f},skeleton->joins[j].transform);
-                    SetMaterialParam_mat4(model->shader,name.c_str(), value_ptr(mat));
-                }
+        SetMaterialParam_float(scene->shader,"time",game_time);
+        SetMaterialParam_mat4(scene->shader,"P", value_ptr(p));
+        SetMaterialParam_mat4(scene->shader,"V", value_ptr(v));
+
+        SetMaterialParam_int(scene->shader,"hasSkin",object->has_skin);
+        if(object->has_skin){
+            skeleton_t* skeleton = object->skeleton;
+            for (int j = 0; j < skeleton->joints_count; ++j) {
+                mat4 mat = skeleton->inverse_bind_matrices[j];
+                std::string name = "u_jointMat["+ std::to_string(j)+"]";
+                mat = calcTransform(mat,skeleton->joins[j]);
+                SetMaterialParam_mat4(scene->shader,name.c_str(), value_ptr(mat));
             }
         }
 
         mat4 M{1.f};
-        M = calcTransform(M,model->transform);
-        SetMaterialParam_mat4(model->shader,"M", value_ptr(M));
+        M = calcTransform(M,object);
+        SetMaterialParam_mat4(scene->shader,"M", value_ptr(M));
 
-        SetMaterialParam_int(model->shader,"baseColorTexture",0);
+        SetMaterialParam_int(scene->shader,"baseColorTexture",0);
 
         for (int j = 0; j < model->mesh_count; ++j) {
             mesh_t * mesh = &model->meshes[j];
             material_t * mat = &mesh->material;
 
-            SetMaterialParam_vec4(model->shader,"base_color", value_ptr(mat->baseColor));
+            SetMaterialParam_vec4(scene->shader,"base_color", value_ptr(mat->baseColor));
 
-            SetMaterialParam_int(model->shader,"hasBaseColorTexture",mat->hasBaseColorTexture);
+            SetMaterialParam_int(scene->shader,"hasBaseColorTexture",mat->hasBaseColorTexture);
             if(mat->hasBaseColorTexture==1){
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D,mat->baseColorTexture);
             }
 
             glBindVertexArray(mesh->vao);
-            glDrawElements(GL_TRIANGLES,mesh->indices_count,GL_UNSIGNED_SHORT,nullptr);
+            if(mesh->indices_count>0){
+                glDrawElements(GL_TRIANGLES,mesh->indices_count,GL_UNSIGNED_SHORT,nullptr);
+            }else{
+                glDrawArrays(GL_TRIANGLES,0,mesh->vertices_count);
+            }
             glBindVertexArray(0);
         }
-        glUseProgram(0);
     }
+
+    glUseProgram(0);
 
     game_time += delta;
 }
 
-mat4 calcTransform(mat4 mat,transform_t transform){
+mat4 calcTransform(transform_t* transform){
+    mat4 M{1.0f};
+    mat4 T = translate(M,transform->position);
+    mat4 R = mat4_cast(transform->rotation);
+    mat4 S = scale(M,transform->scale);
+    M = T*R*S;
+    return M;
+}
+
+mat4 calcTransform(mat4 mat,object_t* object){
     mat4 M = mat;
 
-    mat4 T = translate(M,transform.position);
-    mat4 R = mat4_cast(transform.rotation);
-    mat4 S = scale(M,transform.scale);
+    transform_t * transform = &(object->animated?object->animated_transform:object->transform);
+    mat4 local = calcTransform(transform);
+    mat4 global = mat4{1.0f};
 
-    M = T*R*S;
+    std::vector<transform_t*> parent_transforms;
+    object_t* parent_object = object->parent;
+    int depth = 0;
+
+    while (parent_object){
+        parent_transforms.push_back(&(parent_object->animated?parent_object->animated_transform:parent_object->transform));
+
+        parent_object = parent_object->parent;
+        depth++;
+    }
+
+    for (int i = depth; i >0; i--) {
+        global *= calcTransform(parent_transforms[i-1]);
+    }
+
+    M = global * local * M;
     return M;
 }
