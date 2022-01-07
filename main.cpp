@@ -22,33 +22,34 @@ int main(int argc,char** argv) {
     scene->shader = animateShader;
     scene->camera = new Camera();
 
-//    object_t * tri = Assets::LoadAnimateModel("data/animate_triangle.gltf",scene);
-//    tri->transform.scale = vec3(2);
-//    tri->transform.position += vec3(-2,0,-2);
+    object_t * tri = Assets::LoadAnimateModel("data/animate_triangle.gltf",scene);
+    tri->transform.scale = vec3(2);
+    tri->transform.position += vec3(-1,1,-2);
 
-//    object_t * cube = Assets::LoadAnimateModel("data/AnimatedCube/AnimatedCube.gltf",scene);
-//    cube->transform.position = vec3(3,1,1);
-//    cube->transform.scale = vec3(0.5);
-//    cube->transform.rotation *= quat(vec3(radians(10.0f),0.0f,radians(-10.0f)));
+    object_t * cube = Assets::LoadAnimateModel("data/AnimatedCube/AnimatedCube.gltf",scene);
+    cube->transform.position = vec3(3,2,1);
+    cube->transform.scale = vec3(0.5);
+    cube->transform.rotation *= quat(vec3(radians(10.0f),0.0f,radians(-10.0f)));
 
-//    object_t* box = Assets::LoadAnimateModel("data/BoxAnimated.gltf",scene);
-//    box->transform.position = vec3(0,1,0);
-//    box->transform.scale = vec3(0.5);
-//    box->transform.rotation *= quat(vec3(0.0f,0.0f, radians(30.0f)));
+    object_t* box = Assets::LoadAnimateModel("data/BoxAnimated.gltf",scene);
+    box->transform.position = vec3(0,2,0);
+    box->transform.scale = vec3(0.5);
+    box->transform.rotation *= quat(vec3(0.0f,0.0f, radians(30.0f)));
 
-//    object_t* snake = Assets::LoadAnimateModel("data/Snake.gltf",scene);
-//    snake->transform.position = vec3(0,-1,0);
-//    snake->transform.scale = vec3(0.8);
+    object_t* snake = Assets::LoadAnimateModel("data/Snake.gltf",scene);
+    snake->transform.position = vec3(0,-1,0);
+    snake->transform.scale = vec3(0.8);
 
-//    object_t* fox = Assets::LoadAnimateModel("data/Fox/Fox.gltf",scene);
-//    fox->transform.position = vec3(0,-1,0);
-//    fox->transform.scale = vec3(0.1);
+    object_t* fox = Assets::LoadAnimateModel("data/Fox/Fox.gltf",scene);
+    fox->transform.position = vec3(4,-1,1);
+    fox->transform.scale = vec3(0.02);
 
     object_t* arm = Assets::LoadAnimateModel("data/arm_skin.gltf",scene);
-    arm->transform.position += vec3(0.0f,-1.0f,0.0f);
+    arm->transform.position += vec3(-3.0f,-1.0f,0.0f);
 
     render_mode mode;
     bool play_animate = false;
+    float time = 0.0f;
     while (state.running){
         if(window->GetKeyPressed(KEY_F1)){
             std::cout << "Change Render Mode" << std::endl;
@@ -81,6 +82,9 @@ int main(int argc,char** argv) {
         renderer->Render(scene);
         window->Update();
 
+        snake->transform.position.z = cos(time)*2;
+
+        time+=1.0f/60;
 //        using namespace std::chrono_literals;
 //        std::this_thread::sleep_for(16ms);
     }

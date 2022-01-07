@@ -150,7 +150,7 @@ model_t* trav_get_model(scene_t* scene,tinygltf::Model* cmodel,object_t* node,in
                 int strip = bufferView->byteStride/2;
                 for (int i = 0; i < data_count; ++i) {
                     uvec4 indices{*(ptr+i*strip),*(ptr+i*strip+1),*(ptr+i*strip+2),*(ptr+i*strip+3)};
-                    std::cout << "j " << i << ":" << to_string(indices)  << std::endl;
+//                    std::cout << "j " << i << ":" << to_string(indices)  << std::endl;
                     for (int j = 0; j < 4; ++j) {
                         data.push_back(*(ptr+i*strip+j));
                     }
@@ -189,7 +189,7 @@ model_t* trav_get_model(scene_t* scene,tinygltf::Model* cmodel,object_t* node,in
             std::vector<float> data;
             for (int i = 0; i < data_count; ++i) {
                 vec4 weights{*(ptr+i*4),*(ptr+i*4+1),*(ptr+i*4+2),*(ptr+i*4+3)};
-                std::cout << "w" << i << ":" << to_string(weights) << std::endl;
+//                std::cout << "w" << i << ":" << to_string(weights) << std::endl;
                 for (int j = 0; j < 4; ++j) {
                     data.push_back(*(ptr+i*4+j));
                 }
@@ -245,12 +245,19 @@ skeleton_t* trav_get_skin(scene_t* scene,tinygltf::Model* cmodel,object_t * pare
     skeleton->joints_count = 0;
     for (auto& cjoint_id:cskin.joints) {
         object_t * node = nodes[cjoint_id];
+        node->jointed = 1;
+
+        if(strcmp(node->name,"")==0){
+            memset(node->name,'\0',sizeof(node->name));
+            strcpy(node->name,("jointNode:"+std::to_string(cjoint_id)).c_str());
+        }
+
         if(node == nullptr){
             std::cerr << "load skeleton error" << std::endl;
             exit(-1001);
         }
 
-        skeleton->joins[skeleton->joints_count++] = node;
+        skeleton->joints[skeleton->joints_count++] = node;
     }
 
     Accessor * accessor = &cmodel->accessors[cskin.inverseBindMatrices];
@@ -262,9 +269,9 @@ skeleton_t* trav_get_skin(scene_t* scene,tinygltf::Model* cmodel,object_t * pare
     auto* ptr = (float*)(buffer->data.data()+offset);
     for (int i = 0; i < data_count; ++i) {
         mat4 mat = make_mat4(ptr+i*16);
-//                std::cout << "mat4 " << i << ":" << to_string(mat) << std::endl;
-        mat = mat4{1.0f};
+//        std::cout << "mat4 " << i << ":" << to_string(mat) << std::endl;
         skeleton->inverse_bind_matrices[i] = mat;
+        skeleton->joints[i]->jointed_matrices = mat;
     }
     return skeleton;
 }

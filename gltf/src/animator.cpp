@@ -8,15 +8,22 @@ Animator::Animator(struct object_t *_model):model(_model) {
 }
 
 void Animator::Play() {
-    playing = true;
-    playingAnimation = "";
-    std::cout << "Play Animation [Default]" << std::endl;
+    Play("");
 }
 
 void Animator::Play(const char* name) {
     playing = true;
     playingAnimation = name;
     std::cout << "Play Animation : " << name << std::endl;
+
+    for (int i = 0; i < model->animation_count; ++i) {
+        animation_t* animation = model->animations+i;
+        for (int j = 0; j < animation->channel_count; ++j) {
+            channel_t * channel = animation->channels+j;
+            channel->target->animated = 1;
+            channel->target->animated_transform = channel->target->transform;
+        }
+    }
 }
 
 void Animator::Pause() {
@@ -28,23 +35,23 @@ void Animator::Stop() {
     playing = false;
     playingAnimation = "";
     std::cout << "Stop Animation ..." << std::endl;
-    for (int i = 0; i < MAX_ANIMATION_COUNT; ++i) {
-        currTime[i] = 0;//时间同步
-        for (int j = 0; j < MAX_CHANNEL_COUNT; ++j) {
 
+    for (int i = 0; i < model->animation_count; ++i) {
+        currTime[i] = 0;//时间同步
+        animation_t* animation = model->animations+i;
+        for (int j = 0; j < animation->channel_count; ++j) {
             prevFrame[i][j] = nullptr;
             nextFrame[i][j] = nullptr;
 
-            if(i<model->animation_count){
-                animation_t * animation = model->animations + i;
-                if(j<animation->channel_count){
-                    channel_t * channel = animation->channels + j;
-
-                    channel->target->animated = false;
-                }
-            }
+            channel_t * channel = animation->channels+j;
+            channel->target->animated = 0;
+            channel->target->animated_transform = channel->target->transform;
         }
     }
+}
+
+vec3 lerp(vec3 prev,vec3 next,float interp){
+    return prev+interp*(next-prev);
 }
 
 void Animator::Update(float delta) {
@@ -64,6 +71,7 @@ void Animator::Update(float delta) {
 
         for (int j = 0; j < animation->channel_count; ++j) {
             channel_t* channel = animation->channels+j;
+
             keyframe_t* base_keyframe = channel->keyframe;
             int keyframe_count = channel->keyframe_count;
 
@@ -94,33 +102,39 @@ void Animator::Update(float delta) {
             }
 
             //linear
-            float interp = (currTime[i] - prevFrame[i][j]->time)/(nextFrame[i][j]->time-prevFrame[i][j]->time);
-
-            channel->target->animated_transform = channel->target->transform;
+            float interp = (currTime[i] - prevFrame[i][j]->time)/(nextFrame[i][j]->time - prevFrame[i][j]->time);
 
             if(channel->has_translation){
-                vec3 translation = mix(prevFrame[i][j]->translation,nextFrame[i][j]->translation,interp);
-                vec3 origin = channel->target->transform.position;
-                channel->target->animated_transform.position = origin + translation;
-                channel->target->animated = true;
+                vec3 prev = prevFrame[i][j]->translation;
+                vec3 next = nextFrame[i][j]->translation;
+                vec3 translation = lerp(prev,next,interp);//lerp
+                channel->target->animated_transform.position = translation;
+
+                if(channel->target->jointed==0){
+                    channel->target->animated_transform.position = channel->target->transform.position + translation;
+                }
             }
 
             if(channel->has_rotation){
-                quat origin = channel->target->transform.rotation;
-
                 quat prev = prevFrame[i][j]->rotation;
                 quat next = nextFrame[i][j]->rotation;
-
                 quat rotation = slerp(prev, next,interp);
-                channel->target->animated_transform.rotation = origin * rotation;
-                channel->target->animated = true;
+                channel->target->animated_transform.rotation = rotation;
+
+                if(channel->target->jointed==0){
+                    channel->target->animated_transform.rotation = channel->target->transform.rotation * rotation;
+                }
             }
 
             if(channel->has_scale){
-                vec3 scale = mix(prevFrame[i][j]->scale,nextFrame[i][j]->scale,interp);
-                vec3 origin = channel->target->transform.scale;
-                channel->target->animated_transform.scale = origin * scale;
-                channel->target->animated = true;
+                vec3 prev = prevFrame[i][j]->scale;
+                vec3 next = nextFrame[i][j]->scale;
+                vec3 scale = lerp(prev,next,interp);//lerp
+                channel->target->animated_transform.scale = scale;
+
+                if(channel->target->jointed==0){
+                    channel->target->animated_transform.scale = channel->target->transform.scale * scale;
+                }
             }
         }
 

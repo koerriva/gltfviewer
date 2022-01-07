@@ -20,7 +20,7 @@ public:
     mat4 GetProjection();
 
 private:
-    vec3 position{0.f,0.f,5.f};
+    vec3 position{-5.f,0.f,5.f};
     vec3 target{0.f};
     vec3 up{0.f,1.0f,0.0f};
     float z_near = 0.1f;
@@ -75,7 +75,7 @@ typedef struct animation_t {
 #define MAX_JOINT_COUNT 64
 typedef struct skeleton_t {
     int joints_count = 0;
-    object_t* joins[MAX_JOINT_COUNT] = {nullptr};
+    object_t* joints[MAX_JOINT_COUNT] = {nullptr};
     mat4 inverse_bind_matrices[MAX_JOINT_COUNT]{};
 } skeleton_t;
 
@@ -91,6 +91,9 @@ typedef struct object_t {
     transform_t transform;
     int animated = 0;
     transform_t animated_transform;
+
+    int jointed = 0;
+    mat4 jointed_matrices = mat4{1.0f};
 
     int has_model = 0;
     model_t * model = nullptr;
@@ -167,7 +170,7 @@ private:
 
     object_t * model;
     bool playing = false;
-    const char* playingAnimation = nullptr;
+    const char* playingAnimation = "";
 public:
     explicit Animator(struct object_t * _model);
     void Update(float delta);

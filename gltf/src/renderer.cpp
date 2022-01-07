@@ -94,7 +94,7 @@ void Renderer::Render(scene_t* scene) {
             skeleton_t* skeleton = object->skeleton;
             for (int j = 0; j < skeleton->joints_count; ++j) {
                 mat4 inverse_mat = skeleton->inverse_bind_matrices[j];
-                mat4 joint_mat = getGlobalTransform(skeleton->joins[j]);
+                mat4 joint_mat = getGlobalTransform(skeleton->joints[j]);
                 joint_mat = joint_mat*inverse_mat;
 
                 std::string name = "u_jointMat["+ std::to_string(j)+"]";
