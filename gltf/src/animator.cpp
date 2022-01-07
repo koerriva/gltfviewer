@@ -133,7 +133,7 @@ void Animator::Update(float delta) {
             continue;
         }
 
-        currTime[i] += 0.001;
+        currTime[i] += delta;
     }
 }
 
